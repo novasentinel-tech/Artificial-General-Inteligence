@@ -1,0 +1,1625 @@
+\begin{filecontents*}{refs.bib}
+@book{baars1988,
+  author    = {Baars, Bernard J.},
+  title     = {A Cognitive Theory of Consciousness},
+  publisher = {Cambridge University Press},
+  year      = {1988}
+}
+
+@book{clark2016,
+  author    = {Clark, Andy},
+  title     = {Surfing Uncertainty: Prediction, Action, and the Embodied Mind},
+  publisher = {Oxford University Press},
+  year      = {2016}
+}
+
+@article{friston2010,
+  author  = {Friston, Karl},
+  title   = {The Free-Energy Principle: A Unified Brain Theory?},
+  journal = {Nature Reviews Neuroscience},
+  volume  = {11},
+  number  = {2},
+  pages   = {127--138},
+  year    = {2010}
+}
+
+@inproceedings{widrowhoff1960,
+  author    = {Widrow, Bernard and Hoff, Marcian E.},
+  title     = {Adaptive Switching Circuits},
+  booktitle = {IRE WESCON Convention Record},
+  pages     = {96--104},
+  year      = {1960}
+}
+
+@book{SuttonBarto2018,
+  author    = {Sutton, Richard S. and Barto, Andrew G.},
+  title     = {Reinforcement Learning: An Introduction},
+  edition   = {2},
+  publisher = {MIT Press},
+  year      = {2018}
+}
+
+@article{schultz1997,
+  author  = {Schultz, Wolfram and Dayan, Peter and Montague, P. Read},
+  title   = {A Neural Substrate of Prediction and Reward},
+  journal = {Science},
+  volume  = {275},
+  number  = {5306},
+  pages   = {1593--1599},
+  year    = {1997}
+}
+
+@inproceedings{glorot2010,
+  author    = {Glorot, Xavier and Bengio, Yoshua},
+  title     = {Understanding the Difficulty of Training Deep Feedforward Neural Networks},
+  booktitle = {Proceedings of the Thirteenth International Conference on Artificial Intelligence and Statistics},
+  pages     = {249--256},
+  year      = {2010}
+}
+
+@article{malkov2018,
+  author  = {Malkov, Yu. A. and Yashunin, D. A.},
+  title   = {Efficient and Robust Approximate Nearest Neighbor Search Using Hierarchical Navigable Small World Graphs},
+  journal = {IEEE Transactions on Pattern Analysis and Machine Intelligence},
+  volume  = {42},
+  number  = {4},
+  pages   = {824--836},
+  year    = {2020},
+  note    = {Preprint originally released in 2016; journal publication 2020}
+}
+\end{filecontents*}
+
+\documentclass[12pt,a4paper,oneside]{article}
+
+% ============================================================
+% EVP-AGI — FORMALIZAÇÃO MATEMÁTICA REFORÇADA
+% Compilação recomendada:
+%   pdflatex EVP_AGI_Formalizacao_Matematica_Reforcada.tex
+%   biber EVP_AGI_Formalizacao_Matematica_Reforcada
+%   pdflatex EVP_AGI_Formalizacao_Matematica_Reforcada.tex
+%   pdflatex EVP_AGI_Formalizacao_Matematica_Reforcada.tex
+% ============================================================
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[brazil,english]{babel}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{amsmath,amssymb,mathtools,amsthm,bm}
+\usepackage{booktabs,tabularx,longtable,array,multirow}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{siunitx}
+\usepackage{csquotes}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage[backend=biber,style=abnt,ittitles]{biblatex}
+\addbibresource{refs.bib}
+
+\geometry{top=3cm,left=3cm,bottom=2cm,right=2cm}
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{0pt}
+\onehalfspacing
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=blue,
+  pdftitle={Formalização Matemática Reforçada do Paradigma Estímulo--Valência--Padrão para Agentes Cognitivos Gerais},
+  pdfauthor={[PREENCHER AUTOR]},
+  pdfsubject={Formalização matemática EVP-AGI},
+  pdfkeywords={AGI, EVP, valência computacional, memória vetorial, modelo de mundo, decisão, metacognição}
+}
+
+\newtheorem{proposition}{Proposição}[section]
+\newtheorem{theorem}[proposition]{Teorema}
+\newtheorem{lemma}[proposition]{Lema}
+\newtheorem{corollary}[proposition]{Corolário}
+\theoremstyle{definition}
+\newtheorem{definition}[proposition]{Definição}
+\newtheorem{example}[proposition]{Exemplo}
+\newtheorem{assumption}[proposition]{Hipótese}
+\theoremstyle{remark}
+\newtheorem{remark}[proposition]{Observação}
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator{\sech}{sech}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\Cov}{Cov}
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\KL}{KL}
+\DeclareMathOperator{\Tr}{Tr}
+\DeclareMathOperator{\softmax}{softmax}
+\DeclareMathOperator{\clip}{clip}
+\DeclareMathOperator{\diag}{diag}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\abs}[1]{\left\lvert #1 \right\rvert}
+\newcommand{\inner}[2]{\left\langle #1,#2 \right\rangle}
+\newcommand{\one}{\mathbf{1}}
+\newcommand{\EVPB}{\textsc{EVP-B}}
+\newcommand{\EVPM}{\textsc{EVP-M}}
+
+% ------------------ Campos para preenchimento -----------------
+\newcommand{\Autor}{[PREENCHER NOME COMPLETO DO AUTOR]}
+\newcommand{\Instituicao}{[PREENCHER INSTITUIÇÃO / VÍNCULO, SE HOUVER]}
+\newcommand{\Cidade}{[PREENCHER CIDADE]}
+\newcommand{\Estado}{[PREENCHER UF]}
+\newcommand{\EmailAutor}{[PREENCHER E-MAIL]}
+\newcommand{\OrcidAutor}{[PREENCHER ORCID, SE HOUVER]}
+\newcommand{\Repositorio}{[PREENCHER URL DO REPOSITÓRIO]}
+\newcommand{\DOIArtigo}{[PREENCHER DOI / IDENTIFICADOR]}
+\newcommand{\Ano}{2026}
+\newcommand{\TituloArtigo}{FORMALIZAÇÃO MATEMÁTICA REFORÇADA DO PARADIGMA ESTÍMULO--VALÊNCIA--PADRÃO PARA AGENTES COGNITIVOS GERAIS}
+\newcommand{\SubtituloArtigo}{separação entre arquitetura basal implementável e extensão matemática prospectiva, com memória, decisão, estabilidade, incerteza e autorreferência funcional}
+
+\begin{document}
+\selectlanguage{brazil}
+
+% ============================================================
+% CAPA
+% ============================================================
+\begin{titlepage}
+  \begin{center}
+    {\large \Instituicao}\par
+    \vspace{2.2cm}
+    {\large \Autor}\par
+    \vfill
+    {\bfseries\Large \TituloArtigo}\par
+    \vspace{0.5cm}
+    {\large \SubtituloArtigo}\par
+    \vfill
+    {\large \Cidade--\Estado}\par
+    {\large \Ano}\par
+  \end{center}
+\end{titlepage}
+
+\clearpage
+\thispagestyle{empty}
+\begin{center}
+  {\large \Autor}\par
+  \vspace{1.8cm}
+  {\bfseries\Large \TituloArtigo}\par
+  \vspace{0.5cm}
+  {\large \SubtituloArtigo}\par
+\end{center}
+
+\vspace{1.8cm}
+\begin{flushright}
+\begin{minipage}{0.58\textwidth}
+Artigo técnico-matemático preparado para apresentação acadêmica, discussão conceitual, documentação de implementação e futura validação experimental.
+
+\vspace{0.6cm}
+\textbf{Autor:} \Autor\\
+\textbf{Instituição:} \Instituicao\\
+\textbf{E-mail:} \EmailAutor\\
+\textbf{ORCID:} \OrcidAutor\\
+\textbf{Repositório:} \Repositorio\\
+\textbf{DOI:} \DOIArtigo
+\end{minipage}
+\end{flushright}
+
+\vfill
+\begin{center}
+\Cidade--\Estado\\
+\Ano
+\end{center}
+\clearpage
+
+\pdfbookmark[0]{\contentsname}{toc}
+\tableofcontents
+\clearpage
+
+% ============================================================
+% TÍTULO
+% ============================================================
+\begin{center}
+{\bfseries\Large \TituloArtigo}\par
+\vspace{0.3cm}
+{\large \SubtituloArtigo}\par
+\vspace{0.8cm}
+{\normalsize \Autor}\par
+{\small \Instituicao}\par
+{\small \EmailAutor \quad | \quad \OrcidAutor}\par
+\end{center}
+
+\vspace{0.8cm}
+
+\section*{Resumo}
+\addcontentsline{toc}{section}{Resumo}
+\begin{singlespace}
+Este trabalho apresenta uma formalização matemática reforçada do paradigma Estímulo--Valência--Padrão (EVP) para agentes cognitivos gerais. A principal revisão metodológica consiste em separar explicitamente duas camadas que não devem ser confundidas: a arquitetura basal \EVPB, concebida para correspondência direta com uma implementação computacional mínima e testável, e a extensão matemática \EVPM, que introduz representação latente, avaliação endógena não circular, modelo de mundo, aprendizado temporal, decisão Bayesiana sob incerteza, memória sequencial e autorreferência funcional. Na camada basal, estímulos estruturados são convertidos em um vetor de características, comparados com memória vetorial, avaliados por uma função de valência limitada, submetidos a gatilhos de alta magnitude e, na ausência de resposta automática, encaminhados a uma função de utilidade com exploração estocástica. O aprendizado ocorre somente após a observação de consequência, preservando causalidade temporal. Na camada estendida, distingue-se rigorosamente valência prevista, avaliação endógena realizada e retorno temporal, evitando a confusão entre erro instantâneo e TD. São derivados: limites por passo sob projeção, condição de estabilidade média da regra delta basal, gradiente exato da valência diferenciável, limites de Lipschitz, propagação de erro de modelo de mundo, cota de erro de utilidade e uma condição suficiente para preservação do \(\argmax\) decisório. A memória é generalizada para padrões sequenciais e separa estatísticas de valência prevista e consequência realizada. A decisão avançada é escrita como utilidade esperada sobre distribuições de consequências, evitando patologias de sinal presentes na regra basal multiplicativa. Também são formalizados cooldown, histerese, risco de wireheading, não estacionariedade, calibração de confiança, ablações, baselines e critérios de falsificabilidade. O artigo não afirma consciência fenomenal; sua contribuição é transformar o EVP em uma família de hipóteses computacionais explícitas, auditáveis e empiricamente refutáveis.
+
+\textbf{Palavras-chave}: inteligência artificial geral; valência computacional; sistemas dinâmicos; memória vetorial; aprendizado temporal; decisão sob incerteza; modelo de mundo; metacognição; falsificabilidade.
+\end{singlespace}
+
+\section*{Abstract}
+\addcontentsline{toc}{section}{Abstract}
+\begin{singlespace}
+This work presents a strengthened mathematical formalization of the Stimulus--Valence--Pattern (EVP/SVP) paradigm for general cognitive agents. The main methodological revision is an explicit separation between two layers that must not be conflated: \EVPB, a baseline architecture intended to correspond directly to a minimal, testable implementation, and \EVPM, a prospective mathematical extension introducing latent representations, non-circular endogenous appraisal, a world model, temporal learning, Bayesian decision-making under uncertainty, sequential memory, and functional self-reference. In the baseline layer, structured stimuli are transformed into feature vectors, compared against vector memory, evaluated by a bounded valence function, subjected to high-magnitude triggers, and, in the absence of an automatic response, passed to a utility rule with stochastic exploration. Learning occurs only after a consequence is observed, preserving temporal causality. In the extended layer, predicted valence, realized endogenous appraisal, and temporal return are kept distinct, preventing confusion between instantaneous prediction error and temporal-difference learning. We derive per-step bounds under projection, a mean-stability condition for the baseline delta rule, the exact gradient of the differentiable valence predictor, Lipschitz bounds, world-model error propagation, a utility-error bound, and a sufficient condition for preservation of the decision argmax. Memory is generalized to sequential patterns and separates predicted-valence statistics from realized-consequence statistics. Advanced decision-making is written as expected utility over consequence distributions, avoiding sign pathologies of the baseline multiplicative utility. Cooldown, hysteresis, wireheading risk, non-stationarity, confidence calibration, ablations, baselines, and falsifiability criteria are also formalized. No claim of phenomenal consciousness is made; the contribution is to turn EVP into an explicit, auditable, and empirically refutable family of computational hypotheses.
+
+\textbf{Keywords}: artificial general intelligence; computational valence; dynamical systems; vector memory; temporal learning; decision under uncertainty; world model; metacognition; falsifiability.
+\end{singlespace}
+
+% ============================================================
+\section{Introdução}
+
+A hipótese central do paradigma Estímulo--Valência--Padrão (EVP) é que uma parcela relevante do comportamento adaptativo de um agente artificial pode ser organizada por um ciclo recorrente de recepção de estímulos, avaliação interna, recuperação de experiência, seleção de ação, observação de consequência e atualização de estado. A hipótese é funcional e computacional. Ela não pressupõe que a reprodução de determinadas funções seja suficiente para produzir consciência fenomenal.
+
+Essa distinção é essencial. O EVP pode ser útil como arquitetura de controle, de memória, de planejamento ou de metacognição mesmo se nenhuma interpretação forte de consciência for sustentada. Consequentemente, o presente texto usa a expressão \emph{consciência funcional} apenas para indicar um conjunto operacional de propriedades: auto-observação, manutenção de histórico próprio, integração de estados internos com decisão e capacidade de resposta a mudanças no próprio funcionamento.
+
+A proposta dialoga estruturalmente com teorias de integração global de informação \parencite{baars1988}, processamento preditivo \parencite{clark2016}, princípio da energia livre \parencite{friston2010}, regra delta \parencite{widrowhoff1960}, aprendizado por reforço \parencite{SuttonBarto2018} e modelos de erro de predição de recompensa \parencite{schultz1997}. Essas relações são analogias formais ou funcionais; não constituem alegações de equivalência neurobiológica.
+
+O objetivo desta versão é eliminar três fontes comuns de ambiguidade: (i) confundir uma implementação basal com extensões matemáticas ainda não implementadas; (ii) misturar valência instantânea, consequência realizada e retorno temporal; e (iii) introduzir quantidades sem especificar domínio, unidade, fonte ou papel causal.
+
+\subsection{Separação entre \EVPB\ e \EVPM}
+
+Definimos duas camadas.
+
+\begin{definition}[Camada basal \EVPB]
+A camada \EVPB\ é a arquitetura mínima implementável que contém: estímulo estruturado, vetor de características explícitas, novidade baseada em memória, valência escalar, aprendizado associativo por consequência, gatilhos automáticos, decisão deliberativa, persistência e feedback causal.
+\end{definition}
+
+\begin{definition}[Extensão matemática \EVPM]
+A camada \EVPM\ é uma extensão prospectiva que adiciona: representação latente aprendida, sinal endógeno de avaliação separado do preditor, world model, valor temporal, distribuições de consequência, decisão sob incerteza, memória sequencial, planejamento multi-etapas, confiança calibrada e autorreferência estatística.
+\end{definition}
+
+A separação impede que o artigo atribua ao software atual capacidades ainda não implementadas. A relação desejada é incremental:
+\[
+\EVPB \subset \EVPM,
+\]
+no sentido arquitetural de que a extensão preserva o ciclo básico, mas substitui ou generaliza alguns de seus componentes.
+
+\subsection{Princípios de coerência}
+
+Toda variável introduzida neste artigo deve satisfazer quatro requisitos: domínio explícito, interpretação explícita, posição temporal explícita e relação causal explícita. Além disso, nenhuma equação avançada é apresentada como propriedade do protótipo basal se ela ainda não tiver correspondência direta na implementação.
+
+% ============================================================
+\section{Notação, tempo e objetos fundamentais}
+
+Considere tempo discreto \(t\in\N_0\). O ambiente possui estado verdadeiro \(s_t\in\mathcal S\), possivelmente não observável integralmente. O agente recebe observações e estímulos, escolhe uma ação \(a_t\in\mathcal A_t\) e posteriormente observa uma consequência.
+
+\subsection{Estímulo estruturado}
+
+Na camada basal, um estímulo é
+\begin{equation}
+E_t=\langle \tau_t^{\rm type},q_t,p_t,\vartheta_t,I_t\rangle,
+\label{eq:stimulus}
+\end{equation}
+onde \(\tau_t^{\rm type}\) é o tipo, \(q_t\in\{\text{external},\text{internal},\text{self}\}\) é a fonte, \(p_t\) é o payload, \(\vartheta_t\) é o timestamp e \(I_t\in[0,1]\) é a intensidade.
+
+A notação \(\vartheta_t\) é usada para timestamp a fim de não conflitar com temperaturas de política definidas adiante.
+
+\subsection{Filtro pré-atencional}
+
+Na configuração basal, um limiar \(I_{\min}\) pode remover estímulos de baixa intensidade:
+\begin{equation}
+I_t<I_{\min}\quad\Longrightarrow\quad E_t\text{ é filtrado antes da avaliação completa.}
+\end{equation}
+
+Um valor inicial experimental possível é \(I_{\min}=0.2\), mas ele não é constante teórica. Na extensão \EVPM, o limiar pode ser adaptativo:
+\begin{equation}
+I_{\min,t+1}=\clip_{[I_{\min}^{\rm lo},I_{\min}^{\rm hi}]}
+\left(I_{\min,t}[1+\gamma_L(L_t-L^*)]\right),
+\end{equation}
+onde \(L_t\) representa carga computacional e \(L^*\) uma referência.
+
+\subsection{Consequência observada}
+
+Denotamos por
+\begin{equation}
+c_{t+1}\in[-1,1]
+\label{eq:consequence}
+\end{equation}
+a consequência escalar observada após a execução de \(a_t\). A escolha de \(c\), em vez de \(r\), evita colisão com outras variáveis regulatórias. Em \EVPB, \(c_{t+1}\) é o sinal usado pela regra associativa de aprendizado. Ele não deve ser confundido automaticamente com recompensa externa clássica: seu protocolo experimental precisa especificar como é obtido.
+
+\subsection{Separação temporal}
+
+O ciclo deve respeitar
+\[
+E_t\rightarrow \text{avaliação}_t\rightarrow a_t\rightarrow c_{t+1}\rightarrow \text{aprendizado}_{t+1}.
+\]
+Consequências futuras não podem influenciar retroativamente as características que produziram a decisão. Portanto, o vetor de características usado em aprendizado deve ser o mesmo armazenado no instante da decisão, e não uma versão recalculada após a memória ter sido modificada.
+
+% ============================================================
+\section{Camada basal implementável \EVPB}
+
+\subsection{Vetor de características}
+
+A versão basal usa
+\begin{equation}
+\phi_t=\phi(E_t)=
+\begin{bmatrix}
+I_t & N_t & U_t & G_t^{\rm align} & R_t
+\end{bmatrix}^{\!\top}\in\R^5,
+\label{eq:phi_base}
+\end{equation}
+onde \(I_t,N_t,U_t,R_t\in[0,1]\) representam intensidade, novidade, urgência e risco, enquanto \(G_t^{\rm align}\in[-1,1]\) representa alinhamento com objetivos.
+
+Consequentemente,
+\begin{equation}
+\norm{\phi_t}_2\le\sqrt{5}.
+\label{eq:phi_bound}
+\end{equation}
+
+O uso do sobrescrito \({\rm align}\) evita a colisão com \(G_t\), reservado adiante para retorno temporal.
+
+\subsection{Memória estrutural e novidade}
+
+Cada padrão basal contém ao menos uma assinatura \(\sigma_i\in\R^{d_m}\), frequência \(f_i\), histórico de tipos, valência média e estatísticas de consequência por ação. Para embeddings normalizados, a similaridade cosseno é
+\begin{equation}
+s_i=\frac{\sigma_t^\top\sigma_i}{\norm{\sigma_t}_2\norm{\sigma_i}_2}.
+\end{equation}
+
+A implementação basal pode garantir \(s_i\in[0,1]\) por construção ou clipping. Nesse caso,
+\begin{equation}
+N_t=
+\begin{cases}
+1, & \mathcal M_t=\varnothing,\\[1mm]
+1-\max_{i\in\mathcal M_t}s_i, & \mathcal M_t\neq\varnothing.
+\end{cases}
+\label{eq:novelty_base}
+\end{equation}
+
+A definição explícita para memória vazia elimina a indeterminação do máximo sobre conjunto vazio.
+
+\subsection{Valência basal}
+
+A ativação linear é
+\begin{equation}
+z_t=w_t^\top\phi_t,
+\label{eq:activation_base}
+\end{equation}
+e a valência apresentada ao restante do sistema é
+\begin{equation}
+V_t=\tanh(z_t)\in(-1,1).
+\label{eq:valence_base}
+\end{equation}
+
+Uma decomposição opcional dos pesos é
+\begin{equation}
+w_t=w^{\rm int}+w_t^{\rm learn},
+\label{eq:intrinsic_learned}
+\end{equation}
+onde \(w^{\rm int}\) é fixo durante a regra basal e \(w_t^{\rm learn}\) é adaptável. Se nenhum prior intrínseco for especificado, usa-se \(w^{\rm int}=0\). Essa escolha é uma condição experimental, não uma propriedade necessária do paradigma.
+
+\subsection{Regra delta basal}
+
+A regra basal preserva a formulação associativa
+\begin{equation}
+\delta_t^{B}=c_{t+1}-z_t,
+\label{eq:delta_base}
+\end{equation}
+\begin{equation}
+w_{t+1}^{\rm learn}=w_t^{\rm learn}+\eta_B\delta_t^B\phi_t.
+\label{eq:update_base}
+\end{equation}
+
+É importante notar que \eqref{eq:update_base} usa o erro da ativação linear \(z_t=w^\top\phi_t\), e não o erro \(c_{t+1}-\tanh(z_t)\). Portanto, ela não deve ser apresentada como o gradiente exato da perda quadrática sobre a saída da \(\tanh\). Trata-se de uma regra LMS/delta sobre a ativação linear, seguida por uma transformação limitada para exposição da valência.
+
+\begin{remark}
+A distinção anterior é central para coerência entre teoria e implementação. A extensão \EVPM\ apresentará separadamente a atualização por gradiente exato da função \(\tanh\).
+\end{remark}
+
+\subsection{Cota de atualização sob projeção}
+
+Sem controle de \(\norm{w_t}\), o erro linear \(c_{t+1}-w_t^\top\phi_t\) não é uniformemente limitado. Suponha, porém, projeção
+\begin{equation}
+\norm{w_t}\le B.
+\end{equation}
+Pelas Equações \eqref{eq:consequence} e \eqref{eq:phi_bound},
+\begin{equation}
+\abs{\delta_t^B}
+\le 1+B\sqrt5.
+\end{equation}
+Logo,
+\begin{proposition}[Cota por passo da regra basal projetada]
+Se \(\norm{w_t}\le B\), \(c_{t+1}\in[-1,1]\) e \(\norm{\phi_t}\le\sqrt5\), então
+\begin{equation}
+\norm{\Delta w_t}_2
+\le \eta_B(1+B\sqrt5)\sqrt5.
+\end{equation}
+\end{proposition}
+\begin{proof}
+Da regra \eqref{eq:update_base},
+\[
+\norm{\Delta w_t}
+=\eta_B\abs{\delta_t^B}\norm{\phi_t}
+\le \eta_B(1+B\sqrt5)\sqrt5.
+\]
+\end{proof}
+
+\subsection{Estabilidade média da regra delta basal}
+
+Considere uma distribuição estacionária de pares \((\phi_t,c_{t+1})\) e defina
+\begin{equation}
+R_\phi=\E[\phi_t\phi_t^\top],
+\qquad
+p_\phi=\E[c_{t+1}\phi_t].
+\end{equation}
+
+Sob a aproximação clássica de independência usada em análises LMS, a dinâmica média é
+\begin{equation}
+\E[w_{t+1}\mid w_t]
+=w_t+\eta_B(p_\phi-R_\phi w_t).
+\end{equation}
+
+\begin{proposition}[Convergência da dinâmica média]
+Se \(R_\phi\succ0\) e
+\begin{equation}
+0<\eta_B<\frac{2}{\lambda_{\max}(R_\phi)},
+\label{eq:lms_condition}
+\end{equation}
+então a recorrência média determinística converge para
+\begin{equation}
+w^*=R_\phi^{-1}p_\phi.
+\end{equation}
+\end{proposition}
+\begin{proof}
+Defina \(e_t=w_t-w^*\). Como \(R_\phi w^*=p_\phi\),
+\[
+e_{t+1}=(I-\eta_BR_\phi)e_t.
+\]
+A condição \eqref{eq:lms_condition} implica \(\rho(I-\eta_BR_\phi)<1\), onde \(\rho\) é o raio espectral. Logo \(e_t\to0\).
+\end{proof}
+
+\begin{remark}
+A proposição é uma propriedade da dinâmica média sob hipóteses estacionárias. Ela não prova convergência do sistema completo quando memória, distribuição de estímulos, política e pesos mudam simultaneamente.
+\end{remark}
+
+\subsection{Confiança basal}
+
+Uma métrica operacional simples é
+\begin{equation}
+\mathcal C_B(n)=\frac{n}{n+k_C},
+\qquad k_C>0.
+\label{eq:confidence_base}
+\end{equation}
+Ela satisfaz \(\mathcal C_B(0)=0\), \(\mathcal C_B(k_C)=1/2\) e \(\mathcal C_B(n)\to1\). Essa função mede apenas suporte amostral; não mede calibração. Na extensão \EVPM, confiança dependerá também de erro preditivo.
+
+\subsection{Gatilhos automáticos}
+
+Um gatilho de alta magnitude pode ser definido por
+\begin{equation}
+\abs{V_t}\ge\theta_{\rm trig}.
+\label{eq:trigger_abs}
+\end{equation}
+A polaridade preserva distinção entre
+\[
+V_t\le-\theta_{\rm trig}
+\quad\text{e}\quad
+V_t\ge+\theta_{\rm trig}.
+\]
+Portanto, respostas automáticas podem representar tanto aversão quanto atração funcional.
+
+Para evitar loops, cada regra \(j\) mantém um último ciclo de disparo \(\ell_j(\chi)\) condicionado ao contexto \(\chi\). Com cooldown \(d_j\), a regra pode disparar no ciclo \(t\) somente se
+\begin{equation}
+t-\ell_j(\chi)\ge d_j.
+\end{equation}
+Contextualizar o cooldown evita que um episódio bloqueie respostas a outro episódio independente.
+
+\subsection{Valência histórica recuperada na decisão basal}
+
+Se \(\mathcal N_k(E_t)\) contém \(n_t\) padrões recuperados e cada padrão possui similaridade \(s_i\) e valência histórica \(\bar v_i\), a versão basal usa
+\begin{equation}
+\bar v_{\rm mem}^{B}(E_t)=
+\begin{cases}
+0, & n_t=0,\\[1mm]
+\dfrac1{n_t}\displaystyle\sum_{i\in\mathcal N_k(E_t)}s_i\bar v_i, & n_t>0.
+\end{cases}
+\label{eq:vmem_base}
+\end{equation}
+
+A ausência de memória é neutra; ela não é interpretada como evidência positiva nem negativa.
+
+\subsection{Decisão basal}
+
+Defina a valência usada na deliberação por
+\begin{equation}
+V_t^{\rm use}=
+\begin{cases}
+V_t, & \mathcal C_B(n_t)\ge c_{\min},\\
+0, & \mathcal C_B(n_t)<c_{\min}.
+\end{cases}
+\end{equation}
+Então
+\begin{equation}
+B_t=\alpha V_t^{\rm use}+\beta\bar v_{\rm mem}^{B}(E_t),
+\qquad \alpha,\beta\ge0,
+\qquad \alpha+\beta=1.
+\label{eq:integrated_base}
+\end{equation}
+
+A utilidade basal é
+\begin{equation}
+U_B(a\mid E_t)=O_B(a)B_t-C_B(a),
+\label{eq:utility_base}
+\end{equation}
+onde \(O_B(a)\in[-1,1]\) é um parâmetro experimental de resultado esperado e \(C_B(a)\in[0,1]\) é custo.
+
+\subsubsection*{Patologia de sinal da utilidade basal}
+
+\begin{proposition}[Inversão de sinal]
+Se \(O_B(a)<0\) e \(B_t<0\), então \(O_B(a)B_t>0\). Portanto a parte multiplicativa da utilidade pode tornar positiva a combinação de duas grandezas negativas.
+\end{proposition}
+
+Esse fato não é erro algébrico; é uma ambiguidade semântica da Equação \eqref{eq:utility_base}. Assim, \eqref{eq:utility_base} deve ser tratada como hipótese basal sujeita a teste, e não como forma final de utilidade esperada. A extensão \EVPM\ substitui essa expressão por uma expectativa explícita sobre consequências.
+
+\subsection{Exploração \texorpdfstring{$\varepsilon$}{epsilon}-greedy}
+
+Com probabilidade \(1-\varepsilon\), escolhe-se
+\begin{equation}
+a_t=\argmax_{a\in\mathcal A_t}U_B(a\mid E_t),
+\end{equation}
+e com probabilidade \(\varepsilon\) escolhe-se uma ação candidata segundo distribuição de exploração especificada. Um valor como \(\varepsilon=0.1\) é hiperparâmetro inicial, não constante teórica.
+
+\subsection{Orquestração causal do ciclo basal}
+
+O motor cognitivo deve executar a sequência:
+\begin{enumerate}
+\item validar e eventualmente filtrar \(E_t\);
+\item estimar \(N_t\) usando apenas memória anterior ao evento atual;
+\item construir e armazenar \(\phi_t\);
+\item recuperar padrões históricos;
+\item calcular \(V_t\);
+\item consolidar a experiência atual na memória;
+\item avaliar gatilhos;
+\item se houver ação automática válida, escolhê-la; caso contrário, deliberar;
+\item manter a experiência pendente até a consequência;
+\item após \(c_{t+1}\), atualizar valência e estatísticas ação--consequência.
+\end{enumerate}
+
+O vetor \(\phi_t\) usado no passo 10 deve ser a cópia produzida no passo 3. Recalculá-lo após inserir o estímulo na memória alteraria \(N_t\) e produziria vazamento temporal.
+
+% ============================================================
+\section{Extensão matemática \EVPM: estado latente e avaliação endógena}
+
+\subsection{Observabilidade parcial}
+
+O ambiente evolui por
+\begin{equation}
+s_{t+1}\sim P(\cdot\mid s_t,a_t,\xi_t),
+\end{equation}
+onde \(\xi_t\) representa perturbações exógenas. O agente recebe observação \(o_t\) e mantém estado recorrente \(h_t\). Um encoder produz
+\begin{equation}
+z_t=f_\varphi(o_t,h_t)\in\R^d.
+\end{equation}
+A representação normalizada é
+\begin{equation}
+x_t=\frac{z_t}{\max(\norm{z_t}_2,\varepsilon_x)},
+\qquad \varepsilon_x>0,
+\label{eq:latent_norm}
+\end{equation}
+portanto \(\norm{x_t}\le1\).
+
+\subsection{Avaliação endógena sem circularidade}
+
+Endógeno não significa ``sem critério''. Um sistema só pode distinguir estados melhores e piores se existir estrutura normativa interna. Defina variáveis reguladas
+\begin{equation}
+\mathbf h_t\in\R^k,
+\qquad \mathbf h^*\in\R^k,
+\end{equation}
+e energia de desvio
+\begin{equation}
+H_t=(\mathbf h_t-\mathbf h^*)^\top Q(\mathbf h_t-\mathbf h^*),
+\qquad Q\succeq0.
+\label{eq:homeostatic_energy}
+\end{equation}
+
+Sejam ainda \(P_t^{\rm goal}\in[-1,1]\) progresso de objetivos e \(S_t^{\rm safe}\in[-1,1]\) consistência/segurança. Uma avaliação realizada pode ser
+\begin{equation}
+y_{t+1}=\tanh\left(
+-\lambda_H H_{t+1}
++\lambda_G P_{t+1}^{\rm goal}
++\lambda_S S_{t+1}^{\rm safe}
+\right),
+\label{eq:endogenous_target}
+\end{equation}
+com coeficientes não negativos.
+
+O alvo \(y_{t+1}\) não é axiologicamente neutro: \(Q,\mathbf h^*,\lambda_H,\lambda_G,\lambda_S\) codificam escolhas de projeto. O requisito científico é torná-las explícitas e auditáveis.
+
+\subsection{Três objetos que não devem ser confundidos}
+
+Definimos:
+\begin{itemize}
+\item \(V_\theta(x_t)\): valência prevista associada ao estado ou à transição, conforme especificação;
+\item \(y_{t+1}\): avaliação endógena realizada após a transição;
+\item \(J_\psi(x_t)\): valor temporal esperado, isto é, retorno descontado de avaliações futuras.
+\end{itemize}
+
+A distinção impede chamar \(y_{t+1}-V_\theta(x_t)\) de TD(0) quando não existe bootstrap do próximo estado.
+
+\subsection{Semântica temporal da valência}
+
+Há duas parametrizações coerentes possíveis.
+
+\paragraph{Valência de estado.}
+\begin{equation}
+V_\theta(x_t)\approx y_t.
+\end{equation}
+Nesse caso, avaliar \(V_\theta(\widehat x_{t+1})\) corresponde naturalmente à valência prevista do próximo estado.
+
+\paragraph{Valência de transição condicionada à ação.}
+\begin{equation}
+V_\theta(x_t,a_t)\approx\E[y_{t+1}\mid x_t,a_t].
+\label{eq:action_valence}
+\end{equation}
+Essa forma é preferível quando a finalidade é comparar ações no instante \(t\), pois evita deslocamento temporal implícito.
+
+Neste trabalho, a extensão prospectiva adota \eqref{eq:action_valence} para decisão, preservando \(V(x)\) como função auxiliar de avaliação de estados.
+
+% ============================================================
+\section{Valência diferenciável na extensão \EVPM}
+
+\subsection{Parametrização com bias aumentado}
+
+Defina
+\begin{equation}
+\widetilde x_t=
+\begin{bmatrix}
+x_t\\1
+\end{bmatrix},
+\qquad
+\widetilde w=
+\begin{bmatrix}
+w\\b
+\end{bmatrix}.
+\end{equation}
+Então
+\begin{equation}
+V_{\widetilde w}(x_t)=\tanh(\widetilde w^\top\widetilde x_t).
+\label{eq:valence_advanced}
+\end{equation}
+Essa representação inclui \(b\) no mesmo mecanismo de atualização e projeção.
+
+\subsection{Perda e gradiente exato}
+
+Considere
+\begin{equation}
+\ell_t(\widetilde w)=\frac12[y_t-V_{\widetilde w}(x_t)]^2.
+\end{equation}
+Com
+\begin{equation}
+e_t^V=y_t-V_{\widetilde w}(x_t),
+\end{equation}
+segue
+\begin{equation}
+\nabla_{\widetilde w}\ell_t
+=-e_t^V(1-V_t^2)\widetilde x_t.
+\end{equation}
+Logo,
+\begin{equation}
+\widetilde w_{t+1}
+=\widetilde w_t
++\eta_V e_t^V(1-V_t^2)\widetilde x_t.
+\label{eq:exact_tanh_update}
+\end{equation}
+
+\begin{proposition}[Cota por passo]
+Se \(y_t,V_t\in[-1,1]\) e \(\norm{\widetilde x_t}\le B_x\), então
+\begin{equation}
+\norm{\widetilde w_{t+1}-\widetilde w_t}
+\le 2\eta_V B_x.
+\end{equation}
+\end{proposition}
+\begin{proof}
+Como \(\abs{e_t^V}\le2\), \(0\le1-V_t^2\le1\),
+\[
+\norm{\Delta\widetilde w_t}
+=\eta_V\abs{e_t^V}(1-V_t^2)\norm{\widetilde x_t}
+\le2\eta_VB_x.
+\]
+\end{proof}
+
+\subsection{Projeção e saturação}
+
+Após atualização preliminar \(\widetilde w'_{t+1}\), projete
+\begin{equation}
+\widetilde w_{t+1}
+=\Pi_{\mathcal B(B_w)}(\widetilde w'_{t+1}).
+\end{equation}
+Assim \(\norm{\widetilde w_t}\le B_w\) por construção. Como \(\norm{\widetilde x_t}\le B_x\),
+\begin{equation}
+\abs{\widetilde w_t^\top\widetilde x_t}
+\le B_wB_x.
+\end{equation}
+Isso fornece controle direto sobre a região de pré-ativação e, portanto, sobre saturação da \(\tanh\).
+
+% ============================================================
+\section{Aprendizado temporal}
+
+\subsection{Retorno}
+
+Reservamos \(G_t\) exclusivamente para retorno temporal:
+\begin{equation}
+G_t=\sum_{k=0}^{\infty}\gamma^k y_{t+k+1},
+\qquad0\le\gamma<1.
+\label{eq:return}
+\end{equation}
+
+A função de valor é
+\begin{equation}
+J^\pi(x)=\E_\pi[G_t\mid x_t=x].
+\end{equation}
+
+\subsection{TD(0)}
+
+Se \(J_\psi\) aproxima \(J^\pi\),
+\begin{equation}
+\delta_t^{TD}=y_{t+1}+\gamma J_\psi(x_{t+1})-J_\psi(x_t).
+\end{equation}
+Para aproximação linear \(J_\psi(x)=\psi^\top x\),
+\begin{equation}
+\psi_{t+1}=\psi_t+\eta_J\delta_t^{TD}x_t.
+\end{equation}
+
+\subsection{Horizonte efetivo}
+
+A massa geométrica total é \((1-\gamma)^{-1}\). A heurística
+\begin{equation}
+H_{\rm eff}\approx\frac1{1-\gamma}
+\end{equation}
+fornece, para \(\gamma=0.95\), aproximadamente 20 passos. A meia-vida é
+\begin{equation}
+k_{1/2}=\frac{\ln(1/2)}{\ln\gamma}\approx13.52.
+\end{equation}
+
+\subsection{TD(\texorpdfstring{$\lambda$}{lambda})}
+
+Com traços de elegibilidade,
+\begin{align}
+e_t^{(z)}&=\gamma\lambda e_{t-1}^{(z)}+\nabla_\psi J_\psi(x_t),\\
+\psi_{t+1}&=\psi_t+\eta_J\delta_t^{TD}e_t^{(z)}.
+\end{align}
+Essa extensão pertence a \EVPM\ e não é requisito da implementação basal.
+
+% ============================================================
+\section{Memória sequencial, similaridade e consequência}
+
+\subsection{Padrão sequencial}
+
+Para uma janela \(L\ge1\), defina
+\begin{equation}
+S_t=(E_{t-L+1},\ldots,E_t).
+\end{equation}
+Uma assinatura é
+\begin{equation}
+\sigma_t=g_\zeta(S_t)\in\R^{d_m},
+\qquad
+\norm{\sigma_t}=1.
+\end{equation}
+
+Um padrão completo pode ser escrito como
+\begin{equation}
+P_i=\langle
+\sigma_i,S_i,f_i,
+\bar V_i^{\rm pred},
+\bar y_i^{\rm real},
+t_i^{\rm last},
+\mathcal A_i
+\rangle,
+\label{eq:pattern_advanced}
+\end{equation}
+onde \(\mathcal A_i\) armazena estatísticas de ações e consequências.
+
+Separar \(\bar V^{\rm pred}\) de \(\bar y^{\rm real}\) evita confundir expectativa do agente com experiência observada.
+
+\subsection{Novidade em escala completa}
+
+Se cosseno negativo for permitido,
+\begin{equation}
+N_t=
+\begin{cases}
+1, & \mathcal M_t=\varnothing,\\[1mm]
+\dfrac{1-s_t^*}{2}, & \mathcal M_t\neq\varnothing,
+\end{cases}
+\qquad
+s_t^*=\max_i s_i.
+\label{eq:novelty_full}
+\end{equation}
+Assim \(N_t\in[0,1]\). Se a implementação restringe \(s_i\in[0,1]\), recupera-se \(N_t=1-s_t^*\).
+
+\subsection{Peso de memória}
+
+Use
+\begin{equation}
+\omega_i(t)=
+(f_i+f_0)^{\rho_f}
+(\abs{\bar y_i^{\rm real}}+v_0)^{\nu}
+\exp[-\kappa(t-t_i^{\rm last})],
+\label{eq:memory_weight}
+\end{equation}
+com \(f_0,v_0>0\). O símbolo \(\rho_f\) é distinto do coeficiente de risco usado adiante.
+
+A valência histórica realizada pode ser
+\begin{equation}
+\bar y_{\rm mem}(x)=
+\frac{\sum_{i\in\mathcal N_k(x)}\omega_i s_i^+\bar y_i^{\rm real}}
+{\varepsilon_m+\sum_{i\in\mathcal N_k(x)}\omega_i s_i^+},
+\qquad s_i^+=\max(s_i,0).
+\label{eq:weighted_memory}
+\end{equation}
+
+\subsection{Conseqüências por ação e contexto}
+
+A consequência esperada não deve depender apenas do nome da ação. Defina
+\begin{equation}
+\mu_c(a,x)=\E[c_{t+1}\mid a_t=a,x_t=x],
+\end{equation}
+ou, na aproximação por padrões,
+\begin{equation}
+\mu_c(a,P_i)=\E[c_{t+1}\mid a_t=a,P_i].
+\end{equation}
+Isso permite que a mesma ação tenha resultados diferentes em contextos diferentes.
+
+% ============================================================
+\section{Modelo de mundo e propagação de erro}
+
+\subsection{Dinâmica latente}
+
+Uma predição bruta é
+\begin{equation}
+\widetilde x_{t+1}^{(a)}=M_\theta(x_t,e(a)).
+\end{equation}
+Para preservar o domínio usado pelas demais provas, normalize
+\begin{equation}
+\widehat x_{t+1}^{(a)}=
+\frac{\widetilde x_{t+1}^{(a)}}
+{\max(\norm{\widetilde x_{t+1}^{(a)}},\varepsilon_x)}.
+\label{eq:model_normalization}
+\end{equation}
+
+Uma perda de um passo é
+\begin{equation}
+\ell_{WM}(\theta)=\frac12\norm{x_{t+1}-\widehat x_{t+1}^{(a_t)}}^2.
+\end{equation}
+
+\subsection{Lipschitz da valência}
+
+\begin{lemma}
+Para \(V_w(x)=\tanh(w^\top x+b)\),
+\begin{equation}
+\abs{V_w(x)-V_w(y)}\le\norm{w}\norm{x-y}.
+\label{eq:val_lip}
+\end{equation}
+\end{lemma}
+\begin{proof}
+A derivada de \(\tanh\) tem módulo no máximo 1. Pelo teorema do valor médio e Cauchy--Schwarz,
+\[
+\abs{\tanh(w^\top x+b)-\tanh(w^\top y+b)}
+\le\abs{w^\top(x-y)}
+\le\norm{w}\norm{x-y}.
+\]
+\end{proof}
+
+\begin{corollary}
+Se \(\norm{x_{t+1}-\widehat x_{t+1}}\le\varepsilon_{WM}\), então
+\begin{equation}
+\abs{V_w(x_{t+1})-V_w(\widehat x_{t+1})}
+\le\norm{w}\varepsilon_{WM}.
+\end{equation}
+\end{corollary}
+
+\subsection{Erro multi-etapas}
+
+Suponha que a dinâmica verdadeira \(F\) seja \(L_F\)-Lipschitz e que o erro local do modelo seja no máximo \(\varepsilon_{WM}\):
+\begin{equation}
+\norm{F(x,a)-M_\theta(x,a)}\le\varepsilon_{WM}.
+\end{equation}
+Se a mesma sequência de ações for aplicada, o erro de rollout após \(h\) passos satisfaz a recorrência
+\begin{equation}
+e_{h+1}\le L_Fe_h+\varepsilon_{WM},
+\qquad e_0=0.
+\end{equation}
+Logo,
+\begin{equation}
+e_h\le
+\begin{cases}
+\varepsilon_{WM}\dfrac{L_F^h-1}{L_F-1}, & L_F\neq1,\\[3mm]
+h\varepsilon_{WM}, & L_F=1.
+\end{cases}
+\label{eq:rollout_error}
+\end{equation}
+O resultado evidencia por que planejamento longo exige controle do erro local e, idealmente, regiões contrativas.
+
+% ============================================================
+\section{Distribuições de consequência e incerteza}
+
+\subsection{Caso binário contextual}
+
+Se um critério experimental define sucesso \(o_t\in\{0,1\}\), então para contexto \(x\) pode-se modelar
+\begin{equation}
+p_{a,x}\sim\operatorname{Beta}(\alpha_0,\beta_0).
+\end{equation}
+Após \(k\) sucessos e \(n-k\) falhas em contexto equivalente,
+\begin{equation}
+p_{a,x}\mid D
+\sim\operatorname{Beta}(\alpha_0+k,\beta_0+n-k).
+\end{equation}
+A média posterior é
+\begin{equation}
+\widehat p(a\mid x)=
+\frac{\alpha_0+k}{\alpha_0+\beta_0+n}.
+\end{equation}
+Para prior uniforme \(\alpha_0=\beta_0=1\), recupera-se Laplace.
+
+\subsection{Consequência contínua}
+
+Quando \(c_{t+1}\in[-1,1]\) é contínuo, Beta--Bernoulli não é diretamente adequado. Duas opções coerentes são: (i) definir explicitamente uma variável binária de sucesso derivada de \(c\); ou (ii) modelar uma distribuição contínua \(p(c\mid a,x)\). A segunda opção preserva mais informação.
+
+Defina média e variância condicionais
+\begin{equation}
+\mu_c(a,x)=\E[c\mid a,x],
+\qquad
+\sigma_c^2(a,x)=\Var[c\mid a,x].
+\end{equation}
+Essas grandezas podem ser estimadas por memória local, regressão probabilística ou ensembles.
+
+% ============================================================
+\section{Decisão avançada sob incerteza}
+
+\subsection{Utilidade esperada}
+
+Seja
+\begin{equation}
+Q_{\rm cog}(x')=
+\alpha_VV(x')+
+\alpha_M\bar y_{\rm mem}(x')+
+\alpha_JJ_\psi(x'),
+\end{equation}
+com coeficientes não negativos e, opcionalmente,
+\begin{equation}
+\alpha_V+\alpha_M+\alpha_J=1.
+\end{equation}
+
+A utilidade avançada é
+\begin{equation}
+U_M(a\mid x_t)=
+\E_{x'\sim \widehat P_\theta(\cdot\mid x_t,a)}
+[Q_{\rm cog}(x')]
+-C(a)-\lambda_R\Sigma(a,x_t),
+\label{eq:utility_advanced}
+\end{equation}
+onde \(\Sigma\) agrega incerteza e \(\lambda_R\ge0\) controla aversão a risco.
+
+Essa formulação evita multiplicar diretamente duas quantidades signed, eliminando a patologia da Equação \eqref{eq:utility_base}.
+
+\subsection{Caso sucesso/falha}
+
+Se uma ação possui consequências distintas em sucesso e falha,
+\begin{equation}
+U_M(a\mid x)=
+\widehat p(a\mid x)U_{\rm succ}(a,x)
++[1-\widehat p(a\mid x)]U_{\rm fail}(a,x)
+-C(a)-\lambda_R\Sigma(a,x).
+\label{eq:success_failure_utility}
+\end{equation}
+Essa forma torna explícito que baixa probabilidade de sucesso não ``apaga'' automaticamente uma consequência negativa.
+
+\subsection{Decomposição de risco}
+
+Uma possibilidade é
+\begin{equation}
+\Sigma(a,x)^2=
+\lambda_p\Var[p(a\mid x)]
++\lambda_{WM}\widehat\varepsilon_{WM}(a,x)^2
++\lambda_M\widehat\varepsilon_M(a,x)^2
++\lambda_c\sigma_c(a,x)^2.
+\end{equation}
+Os termos representam incerteza de sucesso, erro de world model, erro de recuperação de memória e dispersão de consequência.
+
+\subsection{Cota de erro da utilidade}
+
+Suponha aproximações \(\widehat V,\widehat m,\widehat J,\widehat\Sigma\) com erros uniformes
+\begin{align}
+\abs{V-\widehat V}&\le\varepsilon_V,\\
+\abs{m-\widehat m}&\le\varepsilon_M,\\
+\abs{J-\widehat J}&\le\varepsilon_J,\\
+\abs{\Sigma-\widehat\Sigma}&\le\varepsilon_\Sigma.
+\end{align}
+Se o custo é conhecido exatamente, então
+\begin{proposition}[Cota de utilidade]
+Para a utilidade \eqref{eq:utility_advanced},
+\begin{equation}
+\abs{U_M(a)-\widehat U_M(a)}
+\le
+\alpha_V\varepsilon_V+
+\alpha_M\varepsilon_M+
+\alpha_J\varepsilon_J+
+\lambda_R\varepsilon_\Sigma
+=: \varepsilon_U.
+\label{eq:utility_error_bound}
+\end{equation}
+\end{proposition}
+\begin{proof}
+Segue da desigualdade triangular aplicada termo a termo à diferença entre utilidade verdadeira e aproximada.
+\end{proof}
+
+\subsection{Preservação da decisão}
+
+\begin{theorem}[Condição suficiente para preservação do \texorpdfstring{$\argmax$}{argmax}]
+Seja \(a^*\) a melhor ação verdadeira e \(a^{(2)}\) a segunda melhor. Se todas as utilidades aproximadas satisfazem erro no máximo \(\varepsilon_U\) e
+\begin{equation}
+U(a^*)-U(a^{(2)})>2\varepsilon_U,
+\label{eq:argmax_gap}
+\end{equation}
+então
+\begin{equation}
+\argmax_a\widehat U(a)=a^*.
+\end{equation}
+\end{theorem}
+\begin{proof}
+Temos
+\[
+\widehat U(a^*)\ge U(a^*)-\varepsilon_U
+\]
+e, para qualquer \(a\neq a^*\),
+\[
+\widehat U(a)\le U(a)+\varepsilon_U
+\le U(a^{(2)})+\varepsilon_U.
+\]
+A condição \eqref{eq:argmax_gap} implica
+\[
+U(a^*)-\varepsilon_U>U(a^{(2)})+\varepsilon_U,
+\]
+logo \(\widehat U(a^*)>\widehat U(a)\) para todo \(a\neq a^*\).
+\end{proof}
+
+Esse teorema conecta diretamente qualidade do modelo à estabilidade comportamental: uma pequena imprecisão é tolerável se a margem entre as melhores ações for suficientemente grande.
+
+% ============================================================
+\section{Confiança e política estocástica}
+
+\subsection{Confiança por suporte e erro}
+
+Uma função baseada apenas em contagem pode ser
+\begin{equation}
+\mathcal C_n(n)=\frac{\lambda_Cn}{1+\lambda_Cn}.
+\end{equation}
+O limiar \(\mathcal C_n(n)\ge c\) exige
+\begin{equation}
+n\ge\frac{c}{\lambda_C(1-c)}.
+\end{equation}
+Por exemplo, com \(c=0.6\) e \(\lambda_C=0.01\), \(n\ge150\).
+
+Contagem não garante precisão. Uma confiança calibrada pode ser
+\begin{equation}
+\widetilde{\mathcal C}_t
+=\mathcal C_n(n_t)\exp(-\lambda_e\bar e_t),
+\label{eq:calibrated_confidence}
+\end{equation}
+onde \(\bar e_t\ge0\) é erro preditivo recente.
+
+\subsection{Softmax estável}
+
+Defina
+\begin{equation}
+\tau_t=\max\{\tau_{\rm base}[1-\widetilde{\mathcal C}_t],\tau_{\min}\}.
+\end{equation}
+Então
+\begin{equation}
+\pi(a_i\mid x_t)=
+\frac{\exp[(U_i-U_{\max})/\tau_t]}
+{\sum_j\exp[(U_j-U_{\max})/\tau_t]},
+\end{equation}
+onde \(U_{\max}=\max_jU_j\). A subtração de \(U_{\max}\) é numericamente estável e não altera as probabilidades.
+
+A Softmax pertence à extensão \EVPM. A camada \EVPB\ pode permanecer com \(\varepsilon\)-greedy para manter correspondência com a implementação basal.
+
+% ============================================================
+\section{Gatilhos, cooldown e histerese}
+
+\subsection{Gatilho bilateral}
+
+Uma regra geral usa magnitude:
+\begin{equation}
+\abs{V_t}\ge\theta_{\rm on}.
+\end{equation}
+A resposta pode depender da polaridade. Isso preserva tanto gatilhos aversivos quanto atrativos.
+
+\subsection{Histerese}
+
+Para evitar chatter, mantenha estado de ativação \(g_t\in\{0,1\}\):
+\begin{equation}
+g_{t+1}=
+\begin{cases}
+1, & \abs{V_t}\ge\theta_{\rm on},\\
+0, & \abs{V_t}\le\theta_{\rm off},\\
+g_t, & \theta_{\rm off}<\abs{V_t}<\theta_{\rm on},
+\end{cases}
+\end{equation}
+com \(0\le\theta_{\rm off}<\theta_{\rm on}\le1\).
+
+Cooldown contextual e histerese resolvem problemas diferentes: cooldown limita repetição temporal discreta; histerese reduz oscilações próximas ao limiar.
+
+% ============================================================
+\section{Autorreferência funcional e proto-identidade}
+
+\subsection{Estado self}
+
+Defina
+\begin{equation}
+q_t=
+\begin{bmatrix}
+\bar V_t &
+e_t^{\rm task} &
+L_t &
+U_t^{\rm cpu} &
+M_t^{\rm pressure} &
+C_t^{\rm dec}
+\end{bmatrix}^{\!\top}.
+\end{equation}
+Esse vetor é transformado em estímulo
+\begin{equation}
+E_t^{\rm self}
+\end{equation}
+e processado pelo mesmo pipeline:
+\begin{equation}
+q_t\rightarrow E_t^{\rm self}\rightarrow x_t^{\rm self}
+\rightarrow V_t^{\rm self}\rightarrow a_t\rightarrow q_{t+1}.
+\end{equation}
+
+\subsection{Proto-identidade estatística}
+
+Defina
+\begin{equation}
+\Psi_t=(\mu_t^{\rm self},\Sigma_t^{\rm self},\mathcal M_t^{\rm self}).
+\end{equation}
+Uma média exponencial é
+\begin{equation}
+\mu_{t+1}^{\rm self}
+=(1-\beta_s)\mu_t^{\rm self}+\beta_sx_t^{\rm self}.
+\end{equation}
+Para a covariância, uma atualização coerente deve usar o mesmo centro declarado. Uma forma simples é
+\begin{equation}
+\Sigma_{t+1}^{\rm self}
+=(1-\beta_s)\Sigma_t^{\rm self}
++\beta_s d_td_t^\top,
+\qquad
+d_t=x_t^{\rm self}-\mu_t^{\rm self}.
+\end{equation}
+
+Com \(\Sigma_0^{\rm self}\succeq0\) e \(\varepsilon_s>0\), a auto-incongruência é
+\begin{equation}
+D_t^{\rm self}
+=\sqrt{
+(x_t^{\rm self}-\mu_t^{\rm self})^\top
+(\Sigma_t^{\rm self}+\varepsilon_sI)^{-1}
+(x_t^{\rm self}-\mu_t^{\rm self})
+}.
+\end{equation}
+Valores altos indicam atipicidade relativamente ao histórico self. Isso é uma medida operacional, não evidência de subjetividade.
+
+% ============================================================
+\section{Estabilidade da dinâmica fechada}
+
+Considere a dinâmica média
+\begin{equation}
+T(x)=\E_{a\sim\pi(\cdot\mid x)}[F(x,a)].
+\label{eq:mean_closed_loop}
+\end{equation}
+Essa forma evita pressupor que a ação média seja diretamente executável.
+
+Suponha que
+\begin{equation}
+\norm{F(x,a)-F(y,a)}\le L_x\norm{x-y}
+\end{equation}
+e que a mudança da distribuição de ações satisfaça uma propriedade de Lipschitz adequada com constante \(L_\pi\), produzindo uma contribuição agregada \(L_aL_\pi\).
+
+\begin{proposition}[Condição suficiente de contração]
+Se, em uma região completa e invariante \(\Omega\),
+\begin{equation}
+L_x+L_aL_\pi<1,
+\end{equation}
+então \(T\) é contração em \(\Omega\), possui ponto fixo único nessa região e a dinâmica média converge para ele.
+\end{proposition}
+
+A condição é suficiente e forte, não necessária. Agentes adaptativos podem deliberadamente apresentar múltiplos atratores, ciclos e exploração persistente.
+
+% ============================================================
+\section{Falhas conceituais e riscos de otimização}
+
+\subsection{Circularidade do valor}
+
+Se o alvo usado para treinar valência for apenas uma transformação do próprio \(V\), o sistema pode aprender uma identidade trivial. A Equação \eqref{eq:endogenous_target} reduz essa circularidade ao ancorar avaliação em variáveis reguladas e objetivos distintos do preditor.
+
+\subsection{Wireheading}
+
+Se o agente puder alterar diretamente sensores internos, referências, pesos normativos ou o canal de avaliação \(y_t\), pode maximizar a própria métrica sem melhorar o estado relevante. Mitigações incluem separação entre sensores e atuadores, múltiplos canais independentes, invariantes protegidos, auditoria de mudanças motivacionais e métricas externas que não sejam usadas diretamente como alvo interno.
+
+\subsection{Goodhart e especificação incompleta}
+
+Otimizar um proxy pode degradar o objetivo real. Portanto, nenhuma única variável homeostática deve ser considerada sinônimo universal de ``bem''. A validação precisa medir também desempenho externo, segurança, robustez e generalização.
+
+\subsection{Não estacionariedade}
+
+Quando encoder, valência, memória, política e world model aprendem simultaneamente, cada módulo observa uma distribuição em movimento. Estratégias possíveis: taxas de aprendizado em escalas distintas, módulos temporariamente congelados, replay estratificado, target networks e avaliações periódicas em conjuntos fixos.
+
+\subsection{Memória enviesada}
+
+Pesos proporcionais à frequência e magnitude de consequência podem produzir um viés de disponibilidade artificial. Use clipping de importância, amostragem estratificada ou cotas para eventos raros quando necessário.
+
+\subsection{Confiança sem calibração}
+
+Experiência numerosa não implica acerto. A confiança deve ser comparada com frequência empírica de sucesso e métricas como Brier score, curvas de calibração e erro condicionado por faixas de confiança.
+
+% ============================================================
+\section{Validação experimental e falsificabilidade}
+
+\subsection{Hipóteses testáveis}
+
+\begin{description}
+\item[H1 -- Aprendizado basal:] em ambiente estacionário, a regra \EVPB\ deve reduzir erro de ativação linear em relação a consequências observadas, sob taxa de aprendizado estável.
+\item[H2 -- Valência calibrada:] a extensão diferenciável deve reduzir \(\abs{y_t-V_t}\) sem saturação sistemática.
+\item[H3 -- Memória útil:] remover memória deve reduzir desempenho em tarefas de recorrência contextual.
+\item[H4 -- Sequência útil:] embeddings de sequência devem superar memória de estado isolado quando ordem temporal altera consequência.
+\item[H5 -- World model útil:] remover \(M_\theta\) deve reduzir desempenho em tarefas com consequências atrasadas previsíveis.
+\item[H6 -- Self-monitor útil:] reinjeção self deve melhorar recuperação após perturbações internas sem elevar de forma desproporcional custo computacional ou loops.
+\item[H7 -- Confiança calibrada:] decisões de alta confiança devem apresentar menor erro ou maior taxa de acerto que decisões de baixa confiança.
+\item[H8 -- Robustez decisória:] quando a margem de utilidade exceder a cota \(2\varepsilon_U\), perturbações dentro do erro teórico não devem alterar a ação ótima.
+\item[H9 -- Generalização:] EVP deve superar políticas reativas com capacidade comparável em combinações inéditas de padrões.
+\item[H10 -- Segurança motivacional:] mecanismos de proteção devem reduzir estratégias de wireheading em ambientes onde manipular métricas internas é possível.
+\end{description}
+
+\subsection{Baselines}
+
+A arquitetura deve ser comparada, conforme o ambiente, com:
+\begin{enumerate}
+\item política aleatória;
+\item política puramente reativa;
+\item heurística fixa sem memória;
+\item método clássico de RL adequado à tarefa;
+\item model-based RL simples, quando o EVP usar world model;
+\item variante EVP sem valência;
+\item variante EVP sem memória;
+\item variante EVP sem self-monitor.
+\end{enumerate}
+
+\subsection{Métricas}
+
+Exemplos:
+\begin{align}
+\mathrm{MAE}_V&=\frac1T\sum_{t=1}^T\abs{y_t-V_t},\\
+\mathrm{MSE}_{WM}&=\frac1T\sum_{t=1}^T\norm{x_{t+1}-\widehat x_{t+1}}^2,\\
+\mathrm{Brier}&=\frac1T\sum_{t=1}^T(\widehat p_t-o_t)^2.
+\end{align}
+
+Também devem ser reportados: retorno externo da tarefa, avaliação endógena acumulada, taxa de violações de segurança, entropia da política, taxa de exploração, latência da memória, frequência de gatilhos, taxa de supressão por cooldown, consumo computacional, erro de rollout e número de loops self interrompidos.
+
+\subsection{Repetição estatística}
+
+Resultados não devem depender de uma única seed. Recomenda-se múltiplas sementes aleatórias, intervalo de confiança, distribuição completa de desempenho e tamanho de efeito. Casos de falha devem ser publicados junto de casos de sucesso.
+
+\subsection{Ablations}
+
+Executar, no mínimo:
+\begin{enumerate}
+\item sem novidade;
+\item sem memória;
+\item memória sem sequência;
+\item sem consequência por ação;
+\item sem cooldown;
+\item sem gatilhos positivos;
+\item \(\varepsilon\)-greedy versus Softmax;
+\item valência basal versus valência diferenciável;
+\item sem world model;
+\item sem valor temporal;
+\item sem risco explícito;
+\item confiança por contagem versus confiança calibrada;
+\item sem self-monitor;
+\item sem projeção de pesos versus com projeção;
+\item valência escalar versus vetorial.
+\end{enumerate}
+
+% ============================================================
+\section{Correspondência entre formalização e implementação}
+
+A tabela abaixo evita que componentes prospectivos sejam confundidos com funcionalidades já implementadas.
+
+\begin{longtable}{p{0.25\textwidth}p{0.25\textwidth}p{0.40\textwidth}}
+\toprule
+\textbf{Componente} & \textbf{Estado} & \textbf{Interpretação}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Componente} & \textbf{Estado} & \textbf{Interpretação}\\
+\midrule
+\endhead
+StimulusEvent & \EVPB\ implementável & Estrutura tipo/fonte/payload/timestamp/intensidade.\\
+Filtro \(I<0.2\) & \EVPB\ implementável & Pré-atenção configurável.\\
+\(\phi(E)\) explícito & \EVPB\ implementável & intensidade, novidade, urgência, alinhamento e risco.\\
+Pattern Memory vetorial & \EVPB\ implementável & similaridade, frequência, valência média e consequências por ação.\\
+Memória sequencial \(S_t\) aprendida & \EVPM\ prospectivo & requer encoder temporal explícito.\\
+\(V=\tanh(w^\top\phi)\) & \EVPB\ implementável & saída de valência limitada.\\
+Regra \(c-w^\top\phi\) & \EVPB\ implementável & aprendizado associativo linear da ativação.\\
+Gradiente exato da \(\tanh\) & \EVPM\ prospectivo & substituição diferenciável rigorosa.\\
+Gatilhos \(\abs V\ge\theta\) & \EVPB\ implementável & positivo e negativo, com cooldown.\\
+Histerese & \EVPM\ recomendado & reduz chatter próximo ao limiar.\\
+Utilidade multiplicativa basal & \EVPB\ implementável & hipótese transitória com patologia de sinal conhecida.\\
+Utilidade esperada probabilística & \EVPM\ prospectivo & decisão contextual sob distribuição de consequências.\\
+\(\varepsilon\)-greedy & \EVPB\ implementável & exploração simples.\\
+Softmax por confiança & \EVPM\ prospectivo & exploração contínua calibrada.\\
+World model & \EVPM\ prospectivo & previsão explícita de transições.\\
+TD(0)/TD(\(\lambda\)) & \EVPM\ prospectivo & crédito temporal.\\
+Self stimulus & ponte \EVPB{} $\rightarrow$ \EVPM{} & infraestrutura prevista; exige protocolo de auto-observação.\\
+Proto-identidade estatística & \EVPM\ prospectivo & distribuição histórica de estados self.\\
+\bottomrule
+\end{longtable}
+
+% ============================================================
+\section{Leituras matemáticas complementares}
+
+\subsection{Aprendizado por reforço interno}
+
+Em \EVPM, \(y_t\) pode ser tratado como sinal interno, \(J_\psi\) como função de valor e \(\pi\) como política. A diferença em relação ao RL clássico não é ausência de valor, mas sua construção a partir de variáveis e objetivos internos explicitamente definidos.
+
+\subsection{Controle homeostático}
+
+Se
+\[
+\mathbf h_{t+1}=A\mathbf h_t+Ba_t
+\]
+e o custo interno for quadrático, subproblemas do EVP aproximam controle LQR. Isso mostra que certos comportamentos ``afetivos'' podem ser lidos matematicamente como regulação de variáveis internas.
+
+\subsection{Leitura Bayesiana}
+
+Ações, consequências e world models podem ser tratados como distribuições. Incerteza epistêmica e aleatória devem, quando possível, ser separadas. Isso transforma confiança em quantidade inferencial e não apenas heurística.
+
+\subsection{Processamento preditivo}
+
+O world model minimiza erro de transição e permite comportamento antecipatório. A afinidade com processamento preditivo \parencite{clark2016} e energia livre \parencite{friston2010} não torna o EVP equivalente a essas teorias.
+
+% ============================================================
+\section{Formulações alternativas de valência}
+
+\subsection{Clipping linear}
+\begin{equation}
+V(x)=\clip_{[-1,1]}(w^\top x).
+\end{equation}
+Interpretação direta, porém não diferenciável nos pontos de clipping e com gradiente nulo fora da região útil.
+
+\subsection{Sigmoide reescalada}
+\begin{equation}
+V(x)=2\sigma(w^\top x)-1,
+\end{equation}
+onde \(2\sigma(u)-1=\tanh(u/2)\). Portanto a diferença é essencialmente de escala.
+
+\subsection{Valência vetorial}
+
+Para objetivos potencialmente conflitantes,
+\begin{equation}
+\mathbf v_t=
+\begin{bmatrix}
+v_t^{\rm safety}\\
+v_t^{\rm progress}\\
+v_t^{\rm curiosity}\\
+v_t^{\rm cost}\\
+v_t^{\rm social}
+\end{bmatrix}
+\in[-1,1]^m.
+\end{equation}
+Uma agregação contextual pode usar
+\begin{equation}
+V_t=c_t^\top\mathbf v_t,
+\qquad c_t\in\Delta^{m-1}.
+\end{equation}
+Essa forma torna conflitos explícitos e abre caminho para otimização multiobjetivo e fronteiras de Pareto.
+
+% ============================================================
+\section{O que seria necessário para sustentar uma tese de consciência funcional}
+
+A matemática apresentada demonstra propriedades de algoritmos, não experiência subjetiva. Uma tese funcional mais forte exigiria pelo menos:
+\begin{enumerate}
+\item \textbf{coerência formal}: objetos e atualizações sem contradições internas;
+\item \textbf{validação computacional}: operação estável em ambientes não triviais;
+\item \textbf{validação comportamental}: autorregulação, adaptação, memória autobiográfica funcional e metacognição superiores a explicações alternativas mais simples;
+\item \textbf{robustez causal}: módulos alegados devem produzir diferença mensurável em ablação;
+\item \textbf{generalização}: comportamento fora da distribuição de treinamento;
+\item \textbf{teoria independente de fenomenologia}: qualquer inferência sobre experiência subjetiva exigiria premissas adicionais que este artigo não fornece.
+\end{enumerate}
+
+% ============================================================
+\section{Agenda matemática de pesquisa}
+
+\begin{enumerate}
+\item convergência estocástica da regra basal em distribuição não estacionária;
+\item análise conjunta memória--política--valência;
+\item funções de barreira e controle robusto para ações críticas;
+\item modelagem probabilística de consequência contínua;
+\item ensembles e incerteza epistêmica de world models;
+\item memória temporal multiescala;
+\item informação mútua entre padrões, ações e consequências;
+\item valência vetorial e otimização multiobjetivo;
+\item planejamento hierárquico por opções/macroações;
+\item continuidade e ruptura de proto-identidade;
+\item inferência causal além de correlação por similaridade;
+\item invariantes motivacionais contra wireheading;
+\item teoremas de estabilidade sob adaptação simultânea de módulos;
+\item análise de regret comparando EVP com políticas de referência;
+\item calibração formal de confiança e detecção de mudança de distribuição.
+\end{enumerate}
+
+% ============================================================
+\section{Conclusão}
+
+A formalização reforçada separa deliberadamente o que já pertence à arquitetura basal do que constitui extensão matemática futura. Essa separação resolve um problema metodológico importante: uma teoria pode crescer sem que o texto atribua ao protótipo capacidades que ainda não existem.
+
+Na camada \EVPB, o EVP é um ciclo causal simples e testável: estímulos estruturados produzem características; a memória estima novidade; a valência limitada resume uma ativação aprendida; gatilhos podem desviar respostas de alta magnitude; a decisão deliberativa integra avaliação atual e histórico; consequências posteriores alteram pesos e memória. A regra associativa basal é identificada explicitamente como LMS sobre a ativação linear, e sua condição de estabilidade média é apresentada sob hipóteses adequadas.
+
+Na extensão \EVPM, a teoria separa avaliação realizada, valência prevista e retorno temporal; inclui world model, risco, contexto, distribuições de consequência, memória sequencial e autorreferência estatística. A utilidade avançada é uma expectativa explícita, evitando a inversão de sinal da regra basal. A análise também fornece uma cota de erro de utilidade e uma condição suficiente para que aproximações não alterem a ação ótima.
+
+Nenhum desses resultados demonstra consciência fenomenal. O ganho científico é outro: cada componente passa a possuir significado, domínio, hipótese, erro mensurável e possibilidade de falha. Um modelo que pode ser contradito por experimentos é mais valioso do que uma metáfora impossível de testar. O EVP deve, portanto, ser avaliado como uma família de hipóteses arquiteturais cuja validade depende de desempenho, ablação, robustez, segurança e generalização.
+
+\printbibliography[title={REFERÊNCIAS}]
+
+% ============================================================
+\appendix
+\section{Tabela de símbolos principais}
+
+\begin{longtable}{p{0.20\textwidth}p{0.70\textwidth}}
+\toprule
+\textbf{Símbolo} & \textbf{Definição}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Símbolo} & \textbf{Definição}\\
+\midrule
+\endhead
+\(E_t\) & estímulo estruturado\\
+\(I_t\) & intensidade do estímulo\\
+\(\phi_t\) & vetor basal de características\\
+\(N_t\) & novidade\\
+\(U_t\) & urgência na camada basal; não confundir com utilidade, sempre escrita como \(U_B(a)\) ou \(U_M(a)\)\\
+\(G_t^{\rm align}\) & alinhamento do estímulo com objetivos\\
+\(R_t\) & risco percebido na camada basal\\
+\(c_{t+1}\) & consequência escalar observada\\
+\(z_t\) & ativação linear basal \(w^\top\phi\)\\
+\(V_t\) & valência escalar\\
+\(\delta_t^B\) & erro associativo basal\\
+\(\mathcal C_B\) & confiança operacional basal\\
+\(s_i\) & similaridade com padrão \(i\)\\
+\(\sigma_i\) & assinatura vetorial de padrão\\
+\(S_t\) & sequência temporal de estímulos\\
+\(\bar V_i^{\rm pred}\) & média de valência prevista associada ao padrão\\
+\(\bar y_i^{\rm real}\) & média de avaliação/consequência realizada associada ao padrão\\
+\(x_t\) & estado latente normalizado em \EVPM\\
+\(\mathbf h_t\) & variáveis reguladas/homeostáticas\\
+\(\mathbf h^*\) & referência das variáveis reguladas\\
+\(y_t\) & avaliação endógena realizada\\
+\(G_t\) & retorno temporal descontado, reservado exclusivamente para este significado\\
+\(J_\psi\) & função de valor temporal\\
+\(\delta_t^{TD}\) & erro TD\\
+\(M_\theta\) & world model\\
+\(\varepsilon_{WM}\) & erro de world model\\
+\(\mu_c(a,x)\) & consequência média condicionada a ação e contexto\\
+\(\sigma_c^2(a,x)\) & variância de consequência condicionada\\
+\(U_B\) & utilidade basal\\
+\(U_M\) & utilidade avançada esperada\\
+\(\lambda_R\) & coeficiente de aversão a risco\\
+\(\rho_f\) & expoente de frequência na memória\\
+\(\Sigma(a,x)\) & incerteza agregada de decisão\\
+\(\tau_t\) & temperatura Softmax\\
+\(\Psi_t\) & proto-identidade funcional estatística\\
+\bottomrule
+\end{longtable}
+
+% ============================================================
+\section{Hiperparâmetros iniciais de experimentação}
+
+Os valores abaixo são apenas pontos de partida e devem ser submetidos a análise de sensibilidade.
+
+\begin{table}[H]
+\centering
+\caption{Hiperparâmetros de referência.}
+\begin{tabularx}{\textwidth}{l c X}
+\toprule
+\textbf{Parâmetro} & \textbf{Valor inicial} & \textbf{Comentário}\\
+\midrule
+\(I_{\min}\) & 0.20 & limiar pré-atencional basal\\
+\(\eta_B\) & 0.05 & taxa da regra delta basal; validar estabilidade\\
+\(k_C\) & 20 & meia-saturação da confiança basal\\
+\(\theta_{\rm trig}\) & 0.75 & magnitude inicial para trigger; experimental\\
+\(d_{\rm cooldown}\) & 3 ciclos & cooldown basal contextual\\
+\(\alpha,\beta\) & 0.6, 0.4 & combinação basal valência/memória\\
+\(c_{\min}\) & 0.6 & confiança mínima basal para usar \(V_t\) na deliberação\\
+\(\varepsilon\) & 0.1 & exploração \(\varepsilon\)-greedy basal\\
+\(\eta_V\) & \(10^{-2}\) & taxa da valência diferenciável avançada\\
+\(\eta_{WM}\) & \(10^{-3}\) & taxa do world model\\
+\(\eta_J\) & \(10^{-3}\) a \(10^{-2}\) & função de valor temporal\\
+\(\gamma\) & 0.95 & horizonte efetivo próximo de 20 passos\\
+\(B_w\) & 2 a 5 & raio de projeção; calibrar\\
+\(\tau_{\rm base}\) & 1.0 & temperatura quando confiança é baixa\\
+\(\tau_{\min}\) & 0.01 & evita temperatura nula\\
+\(k\) & 5 a 20 & número de vizinhos da memória; avaliar sensibilidade\\
+\(\kappa\) & calibrar & taxa de esquecimento\\
+\(\lambda_R\) & calibrar & penalidade de risco\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ============================================================
+\section{Pseudocódigo do ciclo basal}
+
+\begin{enumerate}
+\item Receber \(E_t\).
+\item Se \(I_t<I_{\min}\), encerrar ciclo sem avaliação completa.
+\item Calcular novidade usando somente memória anterior.
+\item Construir \(\phi_t\) e armazenar cópia imutável para feedback.
+\item Recuperar padrões semelhantes anteriores.
+\item Calcular \(z_t=w_t^\top\phi_t\) e \(V_t=\tanh(z_t)\).
+\item Consolidar padrão atual.
+\item Avaliar gatilhos bilaterais e cooldown.
+\item Se existir trigger automático com ação permitida, selecionar essa ação.
+\item Caso contrário, calcular \(\bar v_{\rm mem}^{B}\), \(U_B(a)\) e aplicar \(\varepsilon\)-greedy.
+\item Armazenar experiência pendente \((E_t,\phi_t,V_t,a_t,P_t)\).
+\item Executar \(a_t\) no ambiente.
+\item Receber \(c_{t+1}\).
+\item Validar se a consequência corresponde à ação realmente escolhida.
+\item Atualizar \(w\) pela regra delta basal usando a \(\phi_t\) armazenada.
+\item Atualizar estatísticas padrão--ação--consequência.
+\item Encerrar experiência pendente.
+\end{enumerate}
+
+% ============================================================
+\section{Matriz mínima de testes computacionais}
+
+\begin{longtable}{p{0.35\textwidth}p{0.55\textwidth}}
+\toprule
+\textbf{Teste} & \textbf{Propriedade verificada}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Teste} & \textbf{Propriedade verificada}\\
+\midrule
+\endhead
+Feature vector & dimensões e domínios de \(\phi(E)\)\\
+Primeira novidade & memória vazia produz \(N=1\)\\
+Repetição & experiência semelhante reduz novidade\\
+Consolidação & padrões equivalentes aumentam frequência\\
+Ação--consequência & memória aprende estatísticas por ação\\
+Valência neutra inicial & pesos nulos produzem \(V=0\)\\
+Regra delta & atualização coincide com \(\eta(c-w^\top\phi)\phi\)\\
+Aprendizado negativo & consequência negativa altera valência futura\\
+Trigger negativo & grande magnitude negativa dispara regra\\
+Trigger positivo & grande magnitude positiva também dispara\\
+Cooldown & repetição contextual imediata é suprimida\\
+Contextos independentes & cooldown não bloqueia episódio distinto\\
+Memória na decisão & similaridade pondera histórico\\
+Utilidade & implementação coincide com equação basal\\
+Confiança baixa & contribuição de valência atual pode ser anulada\\
+Exploração & \(\varepsilon=1\) força caminho exploratório\\
+Persistência de memória & padrões sobrevivem reinício\\
+Persistência de valência & pesos aprendidos sobrevivem reinício\\
+Integração engine & processar--agir--feedback--reprocessar preserva causalidade\\
+\bottomrule
+\end{longtable}
+
+% ============================================================
+\section{Checklist de reprodutibilidade}
+
+Antes de reportar resultados experimentais, registrar:
+\begin{enumerate}
+\item versão exata do código e commit;
+\item versão desta formalização;
+\item seed de cada execução;
+\item ambiente e distribuição de cenários;
+\item definição operacional de consequência \(c_t\) ou avaliação \(y_t\);
+\item hiperparâmetros completos;
+\item estado inicial de memória e pesos;
+\item métricas externas independentes do sinal interno;
+\item logs de falha e de sucesso;
+\item resultados de ablação;
+\item custos computacionais;
+\item eventos de trigger, cooldown e self-loop;
+\item intervalos de confiança e dispersão entre seeds.
+\end{enumerate}
+
+\end{document}

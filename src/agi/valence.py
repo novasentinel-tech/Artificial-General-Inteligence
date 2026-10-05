@@ -13,44 +13,14 @@ import numpy as np
 from .features import DIMENSIONS
 from .models import StimulusEvent, ValenceResult
 
-
-# ============================================================
-# CONFIGURAÇÕES
-# ============================================================
-
 VALENCE_SCHEMA_VERSION = 1
 
 DEFAULT_LEARNING_RATE = 0.05
 
-# Esse valor NÃO faz parte da teoria EVP.
-#
-# É apenas uma constante operacional utilizada para transformar
-# quantidade de experiências em uma medida observável de
-# confiança.
-#
-# experience_count = 20
-# confidence = 0.5
 DEFAULT_CONFIDENCE_HALF_SATURATION = 20.0
-
-
-# ============================================================
-# RESULTADO DE APRENDIZADO
-# ============================================================
 
 @dataclass(frozen=True)
 class ValenceLearningUpdate:
-    """
-    Registro de uma atualização do motor de valência.
-
-    Esse objeto existe principalmente para:
-
-    - monitoramento;
-    - experimentos;
-    - auditoria matemática;
-    - visualização futura no terminal.
-
-    Ele não participa diretamente da cognição.
-    """
 
     outcome: float
 
@@ -68,81 +38,7 @@ class ValenceLearningUpdate:
 
     learned_weights_after: list[float]
 
-
-# ============================================================
-# MOTOR DE VALÊNCIA
-# ============================================================
-
 class ValenceEngine:
-    """
-    Motor responsável pela construção interna da valência.
-
-    No modelo EVP:
-
-        estímulo
-            ↓
-        características φ(E)
-            ↓
-        ativação linear
-            ↓
-        z = wᵀφ(E)
-            ↓
-        tanh
-            ↓
-        V(E) ∈ [-1, +1]
-
-
-    A valência NÃO é fornecida pelo ambiente.
-
-    Ela é produzida internamente pelo sistema.
-
-
-    =========================================================
-    DOIS COMPONENTES
-    =========================================================
-
-    O artigo descreve:
-
-    1. valência intrínseca;
-    2. valência aprendida.
-
-    Representamos isso como:
-
-        w_total =
-            w_intrinsic
-            +
-            w_learned
-
-    portanto:
-
-        z =
-            (w_intrinsic + w_learned)ᵀ φ(E)
-
-    Essa decomposição continua matematicamente equivalente a:
-
-        z = wᵀφ(E)
-
-
-    =========================================================
-    APRENDIZADO
-    =========================================================
-
-    Após observar uma consequência real r:
-
-        δ = r - wᵀφ(E)
-
-    e:
-
-        Δw =
-            η × δ × φ(E)
-
-    Somente o componente aprendido é atualizado:
-
-        w_learned ← w_learned + Δw
-
-    Os pesos intrínsecos permanecem constantes durante
-    esse mecanismo de aprendizado.
-    """
 
     def __init__(
         self,
@@ -183,14 +79,6 @@ class ValenceEngine:
 
         self._lock = RLock()
 
-        # ----------------------------------------------------
-        # PESOS
-        # ----------------------------------------------------
-
-        # Mantemos a informação de se os pesos intrínsecos
-        # foram fornecidos explicitamente.
-        #
-        # Isso será importante durante carregamento do estado.
         self._intrinsic_explicitly_provided = (
             intrinsic_weights is not None
         )
@@ -206,19 +94,11 @@ class ValenceEngine:
             dtype=np.float64,
         )
 
-        # ----------------------------------------------------
-        # ESTADO DE APRENDIZADO
-        # ----------------------------------------------------
-
         self.experience_count: int = 0
 
         self.last_prediction_error: float | None = None
 
         self.last_outcome: float | None = None
-
-        # ----------------------------------------------------
-        # PERSISTÊNCIA
-        # ----------------------------------------------------
 
         if storage_path is None:
 
@@ -246,26 +126,10 @@ class ValenceEngine:
 
             self._load()
 
-    # ========================================================
-    # PESO TOTAL
-    # ========================================================
-
     @property
     def weights(
         self,
     ) -> np.ndarray:
-        """
-        Vetor total utilizado na função:
-
-            V(E) = tanh(wᵀφ(E))
-
-        onde:
-
-            w =
-                w_intrinsic
-                +
-                w_learned
-        """
 
         return (
             self.intrinsic_weights
@@ -273,25 +137,11 @@ class ValenceEngine:
             self.learned_weights
         ).copy()
 
-    # ========================================================
-    # AVALIAÇÃO
-    # ========================================================
-
     def evaluate(
         self,
         event: StimulusEvent,
         features: np.ndarray,
     ) -> ValenceResult:
-        """
-        Calcula a valência interna atribuída ao estímulo.
-
-        Importante:
-
-        Nenhuma consequência real é conhecida neste momento.
-
-        Portanto esta função representa uma PREDIÇÃO
-        construída pelo estado interno atual do sistema.
-        """
 
         phi = self._validate_features(
             features
@@ -305,13 +155,6 @@ class ValenceEngine:
                 self.learned_weights
             )
 
-            # ------------------------------------------------
-            # ATIVAÇÃO LINEAR
-            # ------------------------------------------------
-            #
-            # z = wᵀφ(E)
-            # ------------------------------------------------
-
             raw_activation = float(
 
                 np.dot(
@@ -321,35 +164,11 @@ class ValenceEngine:
 
             )
 
-            # ------------------------------------------------
-            # VALÊNCIA
-            # ------------------------------------------------
-            #
-            # V(E) = tanh(z)
-            #
-            # tanh garante:
-            #
-            # -1 < V(E) < +1
-            # ------------------------------------------------
-
             score = float(
                 np.tanh(
                     raw_activation
                 )
             )
-
-            # ------------------------------------------------
-            # DECOMPOSIÇÃO
-            # ------------------------------------------------
-            #
-            # contribuição_i =
-            #
-            #     w_i × φ_i(E)
-            #
-            # A soma das contribuições é exatamente:
-            #
-            #     wᵀφ(E)
-            # ------------------------------------------------
 
             components = {
 
@@ -390,53 +209,12 @@ class ValenceEngine:
 
         )
 
-    # ========================================================
-    # APRENDIZADO
-    # ========================================================
-
     def learn(
         self,
         features: np.ndarray,
         outcome: float,
         learning_rate: float | None = None,
     ) -> ValenceLearningUpdate:
-        """
-        Atualiza os pesos aprendidos após observar
-        uma consequência real.
-
-        A equação implementada é exatamente:
-
-            Δw =
-                η
-                ×
-                (r - wᵀφ(E))
-                ×
-                φ(E)
-
-        onde:
-
-            η = taxa de aprendizado
-
-            r = consequência observada
-
-            w = vetor total atual
-
-            φ(E) = vetor de características
-
-
-        IMPORTANTE:
-
-        O erro utiliza:
-
-            wᵀφ(E)
-
-        e NÃO:
-
-            tanh(wᵀφ(E))
-
-        porque essa é a formulação matemática apresentada
-        no modelo EVP original.
-        """
 
         phi = self._validate_features(
             features
@@ -478,10 +256,6 @@ class ValenceEngine:
 
         with self._lock:
 
-            # ------------------------------------------------
-            # PESOS ANTES DO APRENDIZADO
-            # ------------------------------------------------
-
             learned_before = (
                 self.learned_weights.copy()
             )
@@ -491,13 +265,6 @@ class ValenceEngine:
                 +
                 self.learned_weights
             )
-
-            # ------------------------------------------------
-            # PREDIÇÃO LINEAR
-            # ------------------------------------------------
-            #
-            # z = wᵀφ(E)
-            # ------------------------------------------------
 
             raw_prediction = float(
 
@@ -516,13 +283,6 @@ class ValenceEngine:
 
             )
 
-            # ------------------------------------------------
-            # ERRO DE PREDIÇÃO
-            # ------------------------------------------------
-            #
-            # δ = r - wᵀφ(E)
-            # ------------------------------------------------
-
             prediction_error = (
 
                 outcome
@@ -530,15 +290,6 @@ class ValenceEngine:
                 raw_prediction
 
             )
-
-            # ------------------------------------------------
-            # REGRA DELTA
-            # ------------------------------------------------
-            #
-            # Δw =
-            #
-            # η × δ × φ(E)
-            # ------------------------------------------------
 
             delta = (
 
@@ -553,10 +304,6 @@ class ValenceEngine:
                 phi
 
             )
-
-            # ------------------------------------------------
-            # SOMENTE O COMPONENTE APRENDIDO MUDA
-            # ------------------------------------------------
 
             self.learned_weights += (
                 delta
@@ -578,7 +325,6 @@ class ValenceEngine:
                 self.learned_weights.copy()
             )
 
-            # Persistimos imediatamente.
             self._save_locked()
 
         return ValenceLearningUpdate(
@@ -611,23 +357,10 @@ class ValenceEngine:
 
         )
 
-    # ========================================================
-    # COMPONENTE INTRÍNSECO
-    # ========================================================
-
     def intrinsic_activation(
         self,
         features: np.ndarray,
     ) -> float:
-        """
-        Retorna apenas:
-
-            z_intrinsic =
-                w_intrinsicᵀ φ(E)
-
-        Útil para experimentos que desejem distinguir
-        componente intrínseco do aprendido.
-        """
 
         phi = self._validate_features(
             features
@@ -644,20 +377,10 @@ class ValenceEngine:
 
             )
 
-    # ========================================================
-    # COMPONENTE APRENDIDO
-    # ========================================================
-
     def learned_activation(
         self,
         features: np.ndarray,
     ) -> float:
-        """
-        Retorna apenas:
-
-            z_learned =
-                w_learnedᵀ φ(E)
-        """
 
         phi = self._validate_features(
             features
@@ -674,19 +397,10 @@ class ValenceEngine:
 
             )
 
-    # ========================================================
-    # BREAKDOWN
-    # ========================================================
-
     def activation_breakdown(
         self,
         features: np.ndarray,
     ) -> dict[str, Any]:
-        """
-        Expõe de forma interpretável a origem da valência.
-
-        Isso será extremamente útil no monitor.py.
-        """
 
         phi = self._validate_features(
             features
@@ -788,46 +502,9 @@ class ValenceEngine:
 
         }
 
-    # ========================================================
-    # CONFIANÇA
-    # ========================================================
-
     def _calculate_confidence(
         self,
     ) -> float:
-        """
-        Métrica operacional de confiança.
-
-        ATENÇÃO:
-
-        Essa equação NÃO faz parte da formulação matemática
-        original do EVP.
-
-        Ela existe apenas para observabilidade.
-
-        Utilizamos:
-
-                    n
-            C = ---------
-                n + k
-
-        onde:
-
-            n = experiências aprendidas
-
-            k = confidence_half_saturation
-
-        Consequentemente:
-
-            n = 0
-            C = 0
-
-            n = k
-            C = 0.5
-
-            n → ∞
-            C → 1
-        """
 
         n = float(
             self.experience_count
@@ -849,10 +526,6 @@ class ValenceEngine:
 
         )
 
-    # ========================================================
-    # PESOS INTRÍNSECOS
-    # ========================================================
-
     def set_intrinsic_weights(
         self,
         weights: (
@@ -862,18 +535,6 @@ class ValenceEngine:
         ),
         save: bool = True,
     ) -> None:
-        """
-        Permite configurar experimentalmente os pesos
-        intrínsecos.
-
-        IMPORTANTE:
-
-        A arquitetura EVP original não especifica um protocolo
-        definitivo para inicialização destes pesos.
-
-        Portanto qualquer valor definido aqui deve ser
-        documentado como condição experimental.
-        """
 
         vector = self._coerce_weights(
             weights
@@ -893,22 +554,10 @@ class ValenceEngine:
 
                 self._save_locked()
 
-    # ========================================================
-    # RESET DE APRENDIZADO
-    # ========================================================
-
     def reset_learning(
         self,
         save: bool = True,
     ) -> None:
-        """
-        Remove APENAS experiência aprendida.
-
-        Os pesos intrínsecos permanecem intactos.
-
-        Útil para iniciar novos experimentos científicos
-        mantendo a mesma configuração inicial.
-        """
 
         with self._lock:
 
@@ -929,19 +578,9 @@ class ValenceEngine:
 
                 self._save_locked()
 
-    # ========================================================
-    # SNAPSHOT
-    # ========================================================
-
     def snapshot(
         self,
     ) -> dict[str, Any]:
-        """
-        Estado atual do motor de valência.
-
-        Será utilizado futuramente pelo monitor do
-        cérebro artificial.
-        """
 
         with self._lock:
 
@@ -1025,10 +664,6 @@ class ValenceEngine:
 
             }
 
-    # ========================================================
-    # CONVERSÃO DE PESOS
-    # ========================================================
-
     @staticmethod
     def _coerce_weights(
         weights: (
@@ -1038,26 +673,6 @@ class ValenceEngine:
             | None
         ),
     ) -> np.ndarray:
-        """
-        Converte diferentes representações para o vetor
-        matemático utilizado pelo motor.
-
-        Aceita:
-
-        None
-
-        ou:
-
-        {
-            "intensity": 0.0,
-            "novelty": 0.0,
-            ...
-        }
-
-        ou:
-
-        [0, 0, 0, 0, 0]
-        """
 
         if weights is None:
 
@@ -1152,10 +767,6 @@ class ValenceEngine:
             vector.copy()
         )
 
-    # ========================================================
-    # VALIDAÇÃO DAS FEATURES
-    # ========================================================
-
     @staticmethod
     def _validate_features(
         features: np.ndarray,
@@ -1195,10 +806,6 @@ class ValenceEngine:
             raise ValueError(
                 "φ(E) contém NaN ou infinito."
             )
-
-        # ----------------------------------------------------
-        # VALIDAMOS A SEMÂNTICA DEFINIDA EM features.py
-        # ----------------------------------------------------
 
         intensity = phi[0]
         novelty = phi[1]
@@ -1240,10 +847,6 @@ class ValenceEngine:
             phi.copy()
         )
 
-    # ========================================================
-    # PERSISTÊNCIA
-    # ========================================================
-
     def save(
         self,
     ) -> None:
@@ -1255,18 +858,6 @@ class ValenceEngine:
     def _save_locked(
         self,
     ) -> None:
-        """
-        Persistência atômica do estado aprendido.
-
-        Arquivo:
-
-            data/
-            └── brain/
-                └── valence.json
-
-        Isso permite que o sistema continue aprendendo
-        entre diferentes execuções.
-        """
 
         self.storage_path.parent.mkdir(
             parents=True,
@@ -1329,10 +920,6 @@ class ValenceEngine:
             temporary_path,
             self.storage_path,
         )
-
-    # ========================================================
-    # CARREGAMENTO
-    # ========================================================
 
     def _load(
         self,
@@ -1417,16 +1004,6 @@ class ValenceEngine:
             )
 
         )
-
-        # ----------------------------------------------------
-        # PESOS INTRÍNSECOS
-        # ----------------------------------------------------
-        #
-        # Se foram fornecidos explicitamente no construtor,
-        # respeitamos a condição experimental atual.
-        #
-        # Caso contrário, restauramos os pesos salvos.
-        # ----------------------------------------------------
 
         if not self._intrinsic_explicitly_provided:
 
