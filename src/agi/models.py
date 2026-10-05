@@ -5,6 +5,8 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
+import math
+
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -14,15 +16,17 @@ from pydantic import (
 
 
 # ============================================================
-# UTILIDADES TEMPORAIS
+# UTILIDADES
 # ============================================================
+
 
 def utc_now() -> datetime:
     """
-    Retorna timestamp timezone-aware em UTC.
+    Retorna um timestamp timezone-aware em UTC.
 
-    Evitamos datetime.utcnow(), pois ele retorna um datetime
-    sem timezone explícito.
+    Todos os eventos cognitivos utilizam uma referência
+    temporal comum para impedir ambiguidades entre ambientes
+    ou máquinas diferentes.
     """
 
     return datetime.now(
@@ -31,47 +35,73 @@ def utc_now() -> datetime:
 
 
 # ============================================================
+# CONFIGURAÇÃO BASE DOS MODELOS
+# ============================================================
+
+
+class EVPModel(BaseModel):
+    """
+    Classe base para os schemas do sistema EVP.
+
+    extra="forbid":
+        impede campos desconhecidos de entrarem silenciosamente.
+
+    validate_assignment=True:
+        valida alterações feitas depois da criação do objeto.
+
+    str_strip_whitespace=True:
+        remove espaços acidentais no início/fim de strings.
+
+    allow_inf_nan=False:
+        impede NaN e infinito em valores numéricos.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        validate_assignment=True,
+        str_strip_whitespace=True,
+        allow_inf_nan=False,
+    )
+
+
+# ============================================================
 # ORIGEM DO ESTÍMULO
 # ============================================================
 
+
 class StimulusSource(str, Enum):
     """
-    Origem funcional de um estímulo.
+    Fonte funcional de um estímulo.
 
     EXTERNAL
         Informação proveniente do ambiente.
 
-        Exemplos:
-        - visão
-        - texto
-        - sensores
-        - APIs
-        - eventos externos
-
     INTERNAL
-        Estado produzido internamente pelo organismo artificial.
-
-        Exemplos:
-        - necessidade energética
-        - erro de processamento
-        - estado de memória
-        - conflito entre objetivos
+        Estado interno produzido pelo próprio sistema.
 
     SELF
-        Informação referente à representação que o sistema
-        mantém de si próprio.
+        Representação explícita do estado do próprio agente.
 
-        Essa categoria será particularmente importante quando
-        implementarmos o Self-Monitor.
+    O tipo SELF será utilizado posteriormente pelo
+    Self-Monitor para implementar o ciclo reflexivo:
 
-        Exemplos futuros:
-        - "minha confiança está baixa"
-        - "minha memória está saturando"
-        - "meu objetivo mudou"
+        estado interno
+            ↓
+        StimulusEvent(source=SELF)
+            ↓
+        valência
+            ↓
+        memória
+            ↓
+        resposta
+            ↓
+        novo estado interno
     """
 
     EXTERNAL = "external"
+
     INTERNAL = "internal"
+
     SELF = "self"
 
 
@@ -79,9 +109,10 @@ class StimulusSource(str, Enum):
 # ESTÍMULO
 # ============================================================
 
-class StimulusEvent(BaseModel):
+
+class StimulusEvent(EVPModel):
     """
-    Unidade fundamental de entrada do sistema cognitivo.
+    Unidade fundamental de entrada do sistema.
 
     Formalmente:
 
@@ -89,25 +120,29 @@ class StimulusEvent(BaseModel):
 
     onde:
 
-        t = tipo
-        s = fonte
-        p = payload
-        τ = instante temporal
-        I = intensidade
+        t
+            tipo do estímulo
 
-    O estímulo NÃO contém valência.
+        s
+            fonte
 
-    Isso é proposital.
+        p
+            payload
 
-    A valência deve ser uma interpretação produzida pelo
-    sistema após receber o estímulo, e não uma propriedade
-    previamente conhecida da entrada.
+        τ
+            timestamp
+
+        I
+            intensidade normalizada
+
+
+    IMPORTANTE:
+
+    O estímulo NÃO possui valência embutida.
+
+    A valência é uma avaliação produzida internamente
+    posteriormente pelo Valence Engine.
     """
-
-    model_config = ConfigDict(
-        extra="forbid",
-        validate_assignment=True,
-    )
 
     id: str = Field(
         default_factory=lambda: str(
@@ -126,6 +161,7 @@ class StimulusEvent(BaseModel):
         default_factory=dict
     )
 
+    # I ∈ [0,1]
     intensity: float = Field(
         ge=0.0,
         le=1.0,
@@ -135,9 +171,13 @@ class StimulusEvent(BaseModel):
         default_factory=utc_now
     )
 
-    # Permite agrupar estímulos pertencentes
-    # à mesma experiência ou episódio.
+    # Permite agrupar estímulos pertencentes ao mesmo
+    # contexto/episódio.
     context_id: str | None = None
+
+    # --------------------------------------------------------
+    # NORMALIZAÇÃO DO TIPO
+    # --------------------------------------------------------
 
     @field_validator(
         "type"
@@ -147,19 +187,6 @@ class StimulusEvent(BaseModel):
         cls,
         value: str,
     ) -> str:
-        """
-        Evita tipos semanticamente iguais com diferenças
-        puramente textuais.
-
-        Exemplo:
-
-            " Danger "
-            "danger"
-
-        tornam-se:
-
-            "danger"
-        """
 
         normalized = (
             value
@@ -175,19 +202,18 @@ class StimulusEvent(BaseModel):
 
         return normalized
 
+    # --------------------------------------------------------
+    # TIMESTAMP
+    # --------------------------------------------------------
+
     @field_validator(
         "timestamp"
     )
     @classmethod
-    def ensure_timezone(
+    def ensure_utc_timestamp(
         cls,
         value: datetime,
     ) -> datetime:
-        """
-        Garante consistência temporal.
-
-        Se chegar um datetime sem timezone, assumimos UTC.
-        """
 
         if value.tzinfo is None:
 
@@ -201,47 +227,58 @@ class StimulusEvent(BaseModel):
 
 
 # ============================================================
-# RESULTADO DE VALÊNCIA
+# RESULTADO DA VALÊNCIA
 # ============================================================
 
-class ValenceResult(BaseModel):
+
+class ValenceResult(EVPModel):
     """
     Resultado produzido pelo Valence Engine.
 
+    Formalmente:
+
+        V(E) = tanh(wᵀφ(E))
+
+    com:
+
+        V(E) ∈ [-1,+1]
+
+
     score:
 
-        V(E) ∈ [-1, +1]
+        -1
+            valência extremamente negativa
 
-        -1 -> fortemente negativo
-         0 -> neutro
-        +1 -> fortemente positivo
+         0
+            estado neutro
+
+        +1
+            valência extremamente positiva
+
 
     confidence:
 
-        C(E) ∈ [0, 1]
+        confiança operacional da avaliação.
 
-        Representa quanto o sistema confia na estimativa.
+    IMPORTANTE:
 
-        Essa confiança NÃO é a valência.
+        confidence != valence
 
-        Um sistema pode, por exemplo:
+    Exemplo:
 
-            valência = -0.90
-            confiança = 0.15
+        score = -0.90
+        confidence = 0.10
 
-        significando:
+    significa:
 
-            "parece muito negativo,
-             mas quase não tenho experiência suficiente
-             para confiar nisso."
+        "a avaliação atual é fortemente negativa,
+         mas o agente ainda possui pouca experiência
+         para confiar nessa estimativa."
     """
 
-    model_config = ConfigDict(
-        extra="forbid",
-        validate_assignment=True,
+    stimulus_id: str = Field(
+        min_length=1
     )
-
-    stimulus_id: str
 
     score: float = Field(
         ge=-1.0,
@@ -253,105 +290,143 @@ class ValenceResult(BaseModel):
         le=1.0,
     )
 
-    # Decomposição interpretável da ativação.
+    # Contribuição de cada dimensão:
     #
-    # Exemplo:
-    #
-    # {
-    #     "intensity": -0.10,
-    #     "novelty": -0.30,
-    #     "urgency": -0.20,
-    #     "goal_alignment": 0.40,
-    #     "risk": -0.55
-    # }
+    # w_i * φ_i(E)
     components: dict[str, float] = Field(
         default_factory=dict
     )
 
-    # Ativação anterior à compressão por tanh.
+    # z = wᵀφ(E)
     #
-    # Se:
+    # antes:
     #
-    #     z = wᵀφ(E)
-    #
-    # então:
-    #
-    #     score = tanh(z)
-    #
-    # Vamos usar isso no valence.py definitivo.
+    # V(E) = tanh(z)
     raw_activation: float | None = None
+
+    @field_validator(
+        "components"
+    )
+    @classmethod
+    def validate_components(
+        cls,
+        value: dict[str, float],
+    ) -> dict[str, float]:
+
+        for name, component in value.items():
+
+            numeric = float(
+                component
+            )
+
+            if not math.isfinite(
+                numeric
+            ):
+
+                raise ValueError(
+                    "ValenceResult.components contém "
+                    f"valor inválido em '{name}'."
+                )
+
+        return value
 
 
 # ============================================================
 # AÇÃO CANDIDATA
 # ============================================================
 
-class ActionCandidate(BaseModel):
+
+class ActionCandidate(EVPModel):
     """
-    Ação que o sistema pode escolher em determinado ciclo.
+    Ação disponível ao agente em determinado ciclo.
 
-    O módulo de decisão NÃO cria ações arbitrariamente.
+    Essa classe representa o espaço comportamental possível.
 
-    Ele recebe um espaço de ações possíveis e seleciona
-    aquela cuja expectativa de consequência é mais adequada.
+    ==========================================================
+    EQUAÇÃO DE DECISÃO DO EVP
+    ==========================================================
 
-    base_utility:
+        U(a|E) =
 
-        preferência basal pela ação.
+            O(a)
+            *
+            (
+                αV(E)
+                +
+                βv̄_memory
+            )
 
-        Intervalo:
-            [-1, +1]
+            -
 
-        Não representa experiência aprendida.
+            C(a)
 
-        O histórico aprendido pertence à Pattern Memory.
 
-    risk_penalty:
+    portanto esta estrutura possui diretamente:
 
-        sensibilidade da ação ao risco ambiental.
+        O(a)
+            expected_outcome
 
-        Intervalo:
-            [0, 1]
+        C(a)
+            cost
 
-        Exemplo:
 
-            investigate:
-                risk_penalty = 0.8
+    ==========================================================
+    expected_outcome
+    ==========================================================
 
-            avoid:
-                risk_penalty = 0.0
+        O(a) ∈ [-1,+1]
+
+    É a expectativa associada ao resultado da ação.
+
+    Mantemos exatamente o intervalo descrito pelo modelo
+    técnico EVP.
+
+    A interpretação matemática do sinal de O(a) será estudada
+    formalmente nos experimentos, especialmente porque a
+    multiplicação entre dois valores negativos pode produzir
+    utilidade positiva.
+
+
+    ==========================================================
+    cost
+    ==========================================================
+
+        C(a) ∈ [0,1]
+
+    Representa custo computacional, energético ou operacional
+    da execução da ação.
+
+
+    ==========================================================
+    IMPORTANTE
+    ==========================================================
+
+    Removemos:
+
+        base_utility
+        risk_penalty
+
+    porque eles pertenciam ao protótipo inicial e não fazem
+    parte da função de decisão atualmente implementada.
     """
-
-    model_config = ConfigDict(
-        extra="forbid",
-        validate_assignment=True,
-    )
 
     name: str = Field(
         min_length=1,
         max_length=128,
     )
 
-    base_utility: float = Field(
-        default=0.0,
+    # O(a)
+    expected_outcome: float = Field(
         ge=-1.0,
         le=1.0,
     )
 
-    risk_penalty: float = Field(
-        default=0.0,
+    # C(a)
+    cost: float = Field(
         ge=0.0,
         le=1.0,
     )
 
-    # Campo opcional para informações futuras.
-    #
-    # Exemplos:
-    #
-    # {
-    #     "motor_command": "move_back",
-    #     "energy_cost": 0.2
-    # }
     metadata: dict[str, Any] = Field(
         default_factory=dict
     )
@@ -384,39 +459,38 @@ class ActionCandidate(BaseModel):
 # RESULTADO DA DECISÃO
 # ============================================================
 
-class DecisionResult(BaseModel):
+
+class DecisionResult(EVPModel):
     """
-    Resposta produzida pelo Decision Module.
+    Resultado comportamental produzido pelo sistema.
 
-    decision.score NÃO está limitado a [-1, +1].
+    A ação pode ser escolhida através de dois caminhos:
 
-    Isso é intencional.
+        deliberative
 
-    Diferentemente da valência, que é normalizada por definição,
-    o score de decisão representa uma função composta por vários
-    fatores.
+    ou:
 
-    Exemplo futuro:
+        automatic trigger
 
-        Q(a) =
+    O DecisionResult não precisa saber qual módulo produziu
+    a decisão.
 
-            utilidade_base
+    Essa informação é armazenada pelo CognitiveEngine em:
 
-            + alinhamento_com_objetivo
+        CognitiveStep.decision_path
 
-            + valência
 
-            + experiência_histórica
+    score:
 
-            + gatilhos
+        NÃO é obrigatoriamente limitado a [-1,+1].
 
-            - penalidade_de_risco
+    No caminho deliberativo representa:
+
+        U(a|E)
+
+    No caminho automático pode representar, por exemplo,
+    magnitude da valência que originou o trigger.
     """
-
-    model_config = ConfigDict(
-        extra="forbid",
-        validate_assignment=True,
-    )
 
     action: str = Field(
         min_length=1,
@@ -427,49 +501,125 @@ class DecisionResult(BaseModel):
 
     reason: str = ""
 
-    # Futuramente podemos colocar aqui a decomposição completa
-    # da função de decisão.
+    # Breakdown numérico da decisão.
+    #
+    # Exemplo:
+    #
+    # {
+    #     "expected_outcome": 0.6,
+    #     "current_valence": -0.5,
+    #     "memory_valence": -0.4,
+    #     "integrated_valence": -0.46,
+    #     "cost": 0.1,
+    #     "calculated_utility": -0.376
+    # }
     components: dict[str, float] = Field(
         default_factory=dict
     )
 
+    @field_validator(
+        "action"
+    )
+    @classmethod
+    def normalize_action(
+        cls,
+        value: str,
+    ) -> str:
+
+        normalized = (
+            value
+            .strip()
+            .lower()
+        )
+
+        if not normalized:
+
+            raise ValueError(
+                "DecisionResult.action não pode estar vazio."
+            )
+
+        return normalized
+
+    @field_validator(
+        "components"
+    )
+    @classmethod
+    def validate_decision_components(
+        cls,
+        value: dict[str, float],
+    ) -> dict[str, float]:
+
+        for name, component in value.items():
+
+            numeric = float(
+                component
+            )
+
+            if not math.isfinite(
+                numeric
+            ):
+
+                raise ValueError(
+                    "DecisionResult.components contém "
+                    f"valor inválido em '{name}'."
+                )
+
+        return value
+
 
 # ============================================================
-# FEEDBACK DO AMBIENTE
+# CONSEQUÊNCIA REAL
 # ============================================================
 
-class OutcomeEvent(BaseModel):
+
+class OutcomeEvent(EVPModel):
     """
-    Representa a consequência observada APÓS uma ação.
+    Consequência observada APÓS uma ação.
 
-    Essa separação é fundamental:
+    A sequência causal é:
 
-        estímulo
+        StimulusEvent
+            ↓
+        avaliação
             ↓
         decisão
             ↓
         ação
             ↓
-        consequência
+        OutcomeEvent
 
-    O agente não pode conhecer o outcome antes de agir.
+
+    Portanto OutcomeEvent nunca deve existir cognitivamente
+    antes da seleção da ação correspondente.
+
 
     outcome:
 
-        R ∈ [-1, +1]
+        r ∈ [-1,+1]
 
-        -1 -> consequência extremamente negativa
-         0 -> consequência neutra
-        +1 -> consequência extremamente positiva
+    onde:
 
-    O OutcomeEvent vai permitir futuramente que o aprendizado
-    seja desacoplado completamente do ambiente.
+        -1
+            consequência extremamente negativa
+
+         0
+            consequência neutra
+
+        +1
+            consequência extremamente positiva
+
+
+    Esse valor alimentará:
+
+        Δw =
+            η
+            *
+            (
+                r - wᵀφ(E)
+            )
+            *
+            φ(E)
     """
-
-    model_config = ConfigDict(
-        extra="forbid",
-        validate_assignment=True,
-    )
 
     id: str = Field(
         default_factory=lambda: str(
@@ -477,9 +627,16 @@ class OutcomeEvent(BaseModel):
         )
     )
 
-    stimulus_id: str
+    stimulus_id: str = Field(
+        min_length=1
+    )
 
-    action_id: str
+    # Atualmente action_id corresponde ao nome normalizado
+    # da ActionCandidate selecionada.
+    action_id: str = Field(
+        min_length=1,
+        max_length=128,
+    )
 
     outcome: float = Field(
         ge=-1.0,
@@ -496,34 +653,86 @@ class OutcomeEvent(BaseModel):
         default_factory=dict
     )
 
+    @field_validator(
+        "action_id"
+    )
+    @classmethod
+    def normalize_action_id(
+        cls,
+        value: str,
+    ) -> str:
+
+        normalized = (
+            value
+            .strip()
+            .lower()
+        )
+
+        if not normalized:
+
+            raise ValueError(
+                "OutcomeEvent.action_id não pode estar vazio."
+            )
+
+        return normalized
+
+    @field_validator(
+        "timestamp"
+    )
+    @classmethod
+    def ensure_outcome_timestamp_utc(
+        cls,
+        value: datetime,
+    ) -> datetime:
+
+        if value.tzinfo is None:
+
+            return value.replace(
+                tzinfo=timezone.utc
+            )
+
+        return value.astimezone(
+            timezone.utc
+        )
+
 
 # ============================================================
-# OBJETIVO COGNITIVO
+# OBJETIVO INTERNO
 # ============================================================
 
-class GoalState(BaseModel):
+
+class GoalState(EVPModel):
     """
-    Representação básica de um objetivo interno.
+    Representação preliminar de um objetivo do agente.
 
-    Ainda NÃO estamos implementando planejamento.
+    Ainda NÃO constitui um sistema de planejamento.
 
-    Esse modelo existe para preparar uma evolução importante:
+    Ele existe porque:
 
         goal_alignment
 
-    atualmente chega no payload do estímulo.
+    atualmente é fornecido durante a extração de features,
+    mas futuramente deverá ser calculado comparando o estado
+    atual do agente com seus objetivos ativos.
 
-    No futuro, isso deve ser CALCULADO comparando o estado
-    percebido com os objetivos ativos do sistema.
+    Exemplo conceitual:
 
-    Portanto GoalState prepara essa migração sem alterar
-    a arquitetura fundamental.
+        objetivo:
+            manter energy >= 0.30
+
+        estado atual:
+            energy = 0.12
+
+        estímulo:
+            resource_detected
+
+        então:
+
+            goal_alignment > 0
+
+    O valor de alinhamento não deveria permanecer para sempre
+    como um número escrito manualmente pelo ambiente.
     """
-
-    model_config = ConfigDict(
-        extra="forbid",
-        validate_assignment=True,
-    )
 
     id: str = Field(
         default_factory=lambda: str(
@@ -536,6 +745,7 @@ class GoalState(BaseModel):
         max_length=256,
     )
 
+    # Importância relativa do objetivo.
     priority: float = Field(
         default=0.5,
         ge=0.0,
@@ -548,29 +758,47 @@ class GoalState(BaseModel):
         default_factory=dict
     )
 
-
-# ============================================================
-# ESTADO COGNITIVO OBSERVÁVEL
-# ============================================================
-
-class CognitiveState(BaseModel):
-    """
-    Snapshot observável do sistema.
-
-    IMPORTANTE:
-
-    Isso não significa consciência.
-
-    É apenas uma representação computacional explícita
-    do próprio estado interno.
-
-    Posteriormente o Self-Monitor poderá converter mudanças
-    nesse estado em estímulos SELF.
-    """
-
-    model_config = ConfigDict(
-        extra="forbid"
+    @field_validator(
+        "name"
     )
+    @classmethod
+    def normalize_goal_name(
+        cls,
+        value: str,
+    ) -> str:
+
+        normalized = value.strip()
+
+        if not normalized:
+
+            raise ValueError(
+                "GoalState.name não pode estar vazio."
+            )
+
+        return normalized
+
+
+# ============================================================
+# ESTADO COGNITIVO
+# ============================================================
+
+
+class CognitiveState(EVPModel):
+    """
+    Snapshot explícito de propriedades internas do agente.
+
+    Isso NÃO deve ser confundido com consciência.
+
+    É apenas uma representação computacional do estado
+    observável do sistema.
+
+    Posteriormente o Self-Monitor poderá transformar mudanças
+    importantes deste estado em:
+
+        StimulusEvent(
+            source=StimulusSource.SELF
+        )
+    """
 
     cycle: int = Field(
         ge=0
@@ -593,6 +821,18 @@ class CognitiveState(BaseModel):
         ge=0,
     )
 
+    current_valence: float | None = Field(
+        default=None,
+        ge=-1.0,
+        le=1.0,
+    )
+
+    average_valence: float | None = Field(
+        default=None,
+        ge=-1.0,
+        le=1.0,
+    )
+
     timestamp: datetime = Field(
         default_factory=utc_now
     )
@@ -600,3 +840,22 @@ class CognitiveState(BaseModel):
     metadata: dict[str, Any] = Field(
         default_factory=dict
     )
+
+    @field_validator(
+        "timestamp"
+    )
+    @classmethod
+    def ensure_cognitive_timestamp_utc(
+        cls,
+        value: datetime,
+    ) -> datetime:
+
+        if value.tzinfo is None:
+
+            return value.replace(
+                tzinfo=timezone.utc
+            )
+
+        return value.astimezone(
+            timezone.utc
+        )

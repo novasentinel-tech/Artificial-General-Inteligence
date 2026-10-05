@@ -1,103 +1,228 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 
 from .decision import DecisionModule
 from .features import extract_features
-from .memory import PatternMemory
+from .memory import (
+    PatternMatch,
+    PatternMemory,
+)
 from .models import (
     ActionCandidate,
     DecisionResult,
+    OutcomeEvent,
     StimulusEvent,
     ValenceResult,
 )
-from .triggers import Trigger, TriggerSystem
-from .valence import ValenceEngine
+from .triggers import (
+    Trigger,
+    TriggerResolution,
+    TriggerSystem,
+)
+from .valence import (
+    ValenceEngine,
+    ValenceLearningUpdate,
+)
 
+
+# ============================================================
+# RESULTADO DE UM CICLO COGNITIVO
+# ============================================================
 
 @dataclass
 class CognitiveStep:
     """
-    Representa um ciclo cognitivo completo.
+    Snapshot completo de um ciclo cognitivo EVP.
 
-    Não é apenas o resultado final da decisão.
+    Permite observar:
 
-    Ele preserva o estado intermediário da cognição para que
-    possamos observar cientificamente como a resposta foi formada.
+        estímulo
+            ↓
+        novidade
+            ↓
+        φ(E)
+            ↓
+        valência
+            ↓
+        padrões recuperados
+            ↓
+        gatilhos
+            ↓
+        decisão
+
+    Um estímulo pode ser filtrado antes da avaliação completa.
+    Nesse caso vários campos permanecem None/vazios.
     """
+
+    cycle: int
 
     stimulus: StimulusEvent
 
-    novelty: float
+    filtered: bool
+
+    filter_reason: str | None
+
+    novelty: float | None
 
     features: list[float]
 
-    valence: ValenceResult
+    valence: ValenceResult | None
 
-    patterns: list[Any]
+    patterns: list[PatternMatch]
 
     triggers: list[Trigger]
 
-    decision: DecisionResult
+    trigger_resolution: TriggerResolution | None
 
+    decision: DecisionResult | None
+
+    decision_path: str | None
+
+    pattern_id: str | None
+
+
+# ============================================================
+# EXPERIÊNCIA PENDENTE
+# ============================================================
 
 @dataclass
 class ExperienceRecord:
     """
-    Registro temporário de uma experiência ainda sem consequência.
+    Experiência que já gerou uma ação, mas cuja consequência
+    real ainda não foi observada.
 
-    O sistema primeiro percebe e age.
+    Guardamos o vetor original φ(E).
 
-    Só posteriormente recebe a consequência real do ambiente.
+    Isso é fundamental.
+
+    Depois de processar o estímulo, a memória pode mudar.
+    Portanto NÃO devemos recalcular novidade/features
+    quando a consequência chegar.
     """
 
     stimulus: StimulusEvent
+
+    cycle: int
 
     novelty: float
 
     features: np.ndarray
 
+    valence: ValenceResult
+
+    patterns: list[PatternMatch]
+
     decision: DecisionResult
+
+    decision_path: str
 
     pattern_ids: list[str]
 
 
+# ============================================================
+# RESULTADO DO FEEDBACK
+# ============================================================
+
+@dataclass(frozen=True)
+class FeedbackResult:
+    """
+    Resultado do aprendizado causado por uma consequência.
+    """
+
+    stimulus_id: str
+
+    action_id: str
+
+    outcome: float
+
+    prediction_error: float
+
+    weight_delta: list[float]
+
+    updated_pattern_ids: tuple[str, ...]
+
+
+# ============================================================
+# COGNITIVE ENGINE
+# ============================================================
+
 class CognitiveEngine:
     """
-    Motor cognitivo central.
+    Orquestrador central da arquitetura EVP.
 
-    Implementa o ciclo:
+    ==========================================================
+    CICLO
+    ==========================================================
 
-        Estímulo
-            ↓
-        Recuperação de memória
-            ↓
-        Novidade
-            ↓
-        Features cognitivas
-            ↓
-        Valência
-            ↓
-        Padrões
-            ↓
-        Gatilhos
-            ↓
-        Decisão
-            ↓
-        Ação
-            ↓
-        Consequência
-            ↓
-        Aprendizado
+        StimulusEvent
+             │
+             ▼
+        filtro sensorial
+             │
+             ▼
+        Pattern Memory
+        calcula novidade
+             │
+             ▼
+           φ(E)
+             │
+             ▼
+        Valence Engine
+             │
+             ▼
+       recuperação histórica
+             │
+             ▼
+        formação/consolidação
+           de padrão
+             │
+             ▼
+        Trigger System
+             │
+             ├───────────────┐
+             │               │
+        automático?          não
+             │               │
+             ▼               ▼
+       ação automática   DecisionModule
+                             │
+                             ▼
+                          U(a|E)
 
-    O CognitiveEngine não contém a lógica interna de cada camada.
+             └───────┬───────┘
+                     ▼
+                 ação escolhida
+                     │
+                     ▼
+                OutcomeEvent
+                     │
+             ┌───────┴────────┐
+             ▼                ▼
+        Valence Learn    Pattern Outcome
+             │                │
+             └───────┬────────┘
+                     ▼
+               próximo ciclo
 
-    Ele apenas coordena os subsistemas cognitivos.
 
-    Isso mantém a arquitetura modular e coerente com o artigo.
+    ==========================================================
+    PRINCÍPIO TEMPORAL
+    ==========================================================
+
+    process(...)
+
+        NÃO conhece a consequência futura.
+
+    feedback(...)
+
+        ocorre apenas depois da ação.
+
+    Dessa forma não existe vazamento de informação entre
+    decisão e aprendizado.
     """
 
     def __init__(
@@ -106,532 +231,979 @@ class CognitiveEngine:
         valence: ValenceEngine | None = None,
         triggers: TriggerSystem | None = None,
         decisions: DecisionModule | None = None,
+        sensory_threshold: float | None = 0.20,
     ) -> None:
 
-        self.memory = memory or PatternMemory()
+        self.memory = (
+            memory
+            if memory is not None
+            else PatternMemory()
+        )
 
-        self.valence = valence or ValenceEngine()
+        self.valence = (
+            valence
+            if valence is not None
+            else ValenceEngine()
+        )
 
-        self.triggers = triggers or TriggerSystem()
+        self.triggers = (
+            triggers
+            if triggers is not None
+            else TriggerSystem()
+        )
 
-        self.decisions = decisions or DecisionModule()
+        self.decisions = (
+            decisions
+            if decisions is not None
+            else DecisionModule()
+        )
 
-        # Experiências que já produziram uma decisão,
-        # mas ainda não receberam consequência.
+        # ----------------------------------------------------
+        # FILTRO PRÉ-ATENCIONAL
+        # ----------------------------------------------------
+        #
+        # O artigo propõe que estímulos de baixa intensidade
+        # podem ser filtrados antes da avaliação completa.
+        #
+        # O valor 0.20 vem desse cenário experimental,
+        # mas permanece configurável.
+        # ----------------------------------------------------
+
+        if sensory_threshold is not None:
+
+            if not 0.0 <= sensory_threshold <= 1.0:
+
+                raise ValueError(
+                    "sensory_threshold deve estar entre 0 e 1."
+                )
+
+        self.sensory_threshold = (
+            sensory_threshold
+        )
+
+        # ----------------------------------------------------
+        # EXPERIÊNCIAS AGUARDANDO CONSEQUÊNCIA
+        # ----------------------------------------------------
+
         self._pending_experiences: dict[
             str,
             ExperienceRecord
         ] = {}
 
-        # Quantidade de ciclos processados.
+        # Quantidade total de estímulos recebidos.
         self.cycle_count: int = 0
 
-    # =========================================================
-    # CICLO COGNITIVO PRINCIPAL
-    # =========================================================
+    # ========================================================
+    # CICLO COGNITIVO
+    # ========================================================
 
     def process(
         self,
         event: StimulusEvent,
-        actions: list[ActionCandidate],
+        actions: Sequence[ActionCandidate],
     ) -> CognitiveStep:
         """
-        Processa um estímulo e produz uma resposta comportamental.
+        Processa um estímulo até produzir uma resposta.
 
-        Importante:
-
-        Este método NÃO realiza aprendizado por consequência.
-
-        O aprendizado ocorre depois através de:
-
-            learn_from_outcome(...)
-
-        Isso separa corretamente:
-
-            percepção / decisão
-
-        de:
-
-            consequência / aprendizado
+        Nenhum aprendizado por consequência ocorre aqui.
         """
 
-        self._validate_event(event)
+        self._validate_event(
+            event
+        )
 
-        # -----------------------------------------------------
-        # 1. ESTIMATIVA DE NOVIDADE
-        # -----------------------------------------------------
-        #
-        # Novidade representa o quanto a experiência atual
-        # difere das experiências armazenadas anteriormente.
-        #
-        # A memória deve calcular isso comparando características
-        # estruturais do estímulo com padrões conhecidos.
-        # -----------------------------------------------------
+        self.cycle_count += 1
 
-        novelty = self._estimate_novelty(event)
+        cycle = (
+            self.cycle_count
+        )
 
-        # -----------------------------------------------------
-        # 2. EXTRAÇÃO DAS FEATURES COGNITIVAS
-        # -----------------------------------------------------
+        # ====================================================
+        # 1. FILTRO PRÉ-ATENCIONAL
+        # ====================================================
+
+        if self._should_filter(
+            event
+        ):
+
+            return CognitiveStep(
+
+                cycle=
+                    cycle,
+
+                stimulus=
+                    event,
+
+                filtered=
+                    True,
+
+                filter_reason=(
+                    "Stimulus intensity below "
+                    "pre-attentional threshold."
+                ),
+
+                novelty=
+                    None,
+
+                features=
+                    [],
+
+                valence=
+                    None,
+
+                patterns=
+                    [],
+
+                triggers=
+                    [],
+
+                trigger_resolution=
+                    None,
+
+                decision=
+                    None,
+
+                decision_path=
+                    None,
+
+                pattern_id=
+                    None,
+
+            )
+
+        # O cérebro precisa possuir um espaço de ações
+        # explícito para produzir comportamento.
+        actions = list(
+            actions
+        )
+
+        self._validate_action_space(
+            actions
+        )
+
+        # ====================================================
+        # 2. NOVIDADE
+        # ====================================================
         #
-        # Segundo o modelo:
+        # N(E) =
+        #
+        #   1
+        #   -
+        #   max sim(
+        #       σ(E),
+        #       σ(P_i)
+        #   )
+        #
+        # O cálculo ocorre ANTES de inserir a experiência
+        # atual na memória.
+        #
+        # Caso contrário o estímulo seria comparado consigo
+        # mesmo e sua novidade tenderia artificialmente a zero.
+        # ====================================================
+
+        novelty = float(
+
+            self.memory.estimate_novelty(
+                event
+            )
+
+        )
+
+        novelty = self._clamp(
+            novelty,
+            0.0,
+            1.0,
+        )
+
+        # ====================================================
+        # 3. FEATURE VECTOR
+        # ====================================================
         #
         # φ(E) =
         #
         # [
-        #   intensidade,
-        #   novidade,
-        #   urgência,
-        #   alinhamento com objetivos,
-        #   risco
+        #   intensity,
+        #   novelty,
+        #   urgency,
+        #   goal_alignment,
+        #   risk
         # ]
-        #
-        # Essas dimensões não são arbitrárias.
-        #
-        # Cada uma representa uma propriedade relevante
-        # para avaliação adaptativa.
-        # -----------------------------------------------------
+        # ====================================================
 
         features = extract_features(
             event=event,
             novelty=novelty,
         )
 
-        # -----------------------------------------------------
-        # 3. AVALIAÇÃO DE VALÊNCIA
-        # -----------------------------------------------------
+        # ====================================================
+        # 4. RECUPERAÇÃO DE MEMÓRIA ANTERIOR
+        # ====================================================
         #
-        # Valência:
+        # Buscamos os padrões ANTES de registrar o evento atual.
         #
-        # V(E) = tanh(wᵀ φ(E))
+        # Portanto DecisionModule recebe apenas história
+        # anterior ao momento atual.
         #
-        # Ela estima se o estímulo tende a produzir
-        # consequências positivas ou negativas.
+        # Isso evita um ciclo artificial:
         #
-        # Neste momento isso é uma PREDIÇÃO.
+        #     evento atual
+        #       ↓
+        #     memória
+        #       ↓
+        #     decisão influenciada pelo próprio evento
+        #     como se ele já fosse experiência passada.
+        # ====================================================
+
+        patterns = self.memory.find_similar(
+
+            stimulus_type=
+                event.type,
+
+            features=
+                features,
+
+        )
+
+        # ====================================================
+        # 5. VALÊNCIA
+        # ====================================================
         #
-        # A consequência real ainda não aconteceu.
-        # -----------------------------------------------------
+        # V(E) =
+        #
+        # tanh(
+        #     wᵀ φ(E)
+        # )
+        #
+        # Neste momento V(E) é uma expectativa interna.
+        #
+        # A consequência real ainda não existe.
+        # ====================================================
 
         valence = self.valence.evaluate(
-            event=event,
-            features=features,
+
+            event=
+                event,
+
+            features=
+                features,
+
         )
 
-        # -----------------------------------------------------
-        # 4. RECUPERAÇÃO DE PADRÕES RELACIONADOS
-        # -----------------------------------------------------
+        # ====================================================
+        # 6. FORMAÇÃO / CONSOLIDAÇÃO DO PADRÃO ATUAL
+        # ====================================================
         #
-        # Agora buscamos experiências estruturalmente semelhantes.
+        # O padrão é registrado com a valência PREDITA atual.
         #
-        # Isso permite ao sistema utilizar contexto histórico
-        # antes da tomada de decisão.
-        # -----------------------------------------------------
+        # A consequência REAL será acrescentada somente
+        # posteriormente em feedback().
+        # ====================================================
 
-        patterns = self._find_similar_patterns(
-            event=event,
-            features=features,
+        current_pattern = self.memory.remember(
+
+            stimulus_type=
+                event.type,
+
+            features=
+                features,
+
+            valence=
+                valence.score,
+
         )
 
-        # -----------------------------------------------------
-        # 5. GATILHOS
-        # -----------------------------------------------------
-        #
-        # Gatilhos existem para respostas rápidas.
-        #
-        # Exemplo:
-        #
-        # risco extremamente alto
-        #
-        # não deveria exigir raciocínio complexo para produzir
-        # uma resposta defensiva.
-        # -----------------------------------------------------
-
-        triggers = self.triggers.evaluate(
-            event=event,
-            valence=valence,
+        pattern_id = str(
+            current_pattern.id
         )
 
-        # -----------------------------------------------------
-        # 6. DECISÃO
-        # -----------------------------------------------------
-        #
-        # A decisão integra:
-        #
-        # - estado do estímulo
-        # - valência prevista
-        # - gatilhos
-        # - ações possíveis
-        #
-        # Futuramente também vamos incorporar explicitamente
-        # os padrões recuperados no scoring.
-        # -----------------------------------------------------
+        # ====================================================
+        # 7. TRIGGER SYSTEM
+        # ====================================================
 
-        decision = self.decisions.choose(
-            event=event,
-            valence=valence,
-            triggers=triggers,
-            actions=actions,
+        fired_triggers = self.triggers.evaluate(
+
+            event=
+                event,
+
+            valence=
+                valence,
+
+            cycle=
+                cycle,
+
         )
 
-        # -----------------------------------------------------
-        # 7. REGISTRO DA EXPERIÊNCIA
-        # -----------------------------------------------------
-        #
-        # A experiência precisa entrar na memória mesmo antes
-        # da consequência.
-        #
-        # Porém sua consequência permanece desconhecida.
-        #
-        # Assim evitamos ensinar algo que ainda não aconteceu.
-        # -----------------------------------------------------
-
-        pattern_ids = self._remember_experience(
-            event=event,
-            features=features,
-            valence=valence.score,
+        trigger_resolution = (
+            self.triggers.resolve(
+                fired_triggers
+            )
         )
+
+        # ====================================================
+        # 8. SELEÇÃO DO CAMINHO COMPORTAMENTAL
+        # ====================================================
+
+        automatic_action = (
+            self._resolve_automatic_action(
+                resolution=trigger_resolution,
+                actions=actions,
+            )
+        )
+
+        # ----------------------------------------------------
+        # CAMINHO AUTOMÁTICO
+        # ----------------------------------------------------
+
+        if automatic_action is not None:
+
+            dominant_trigger = (
+                trigger_resolution.trigger
+            )
+
+            if dominant_trigger is None:
+
+                raise RuntimeError(
+                    "Trigger resolution inconsistente: "
+                    "automatic_action sem trigger dominante."
+                )
+
+            decision = DecisionResult(
+
+                action=
+                    automatic_action.name,
+
+                score=
+                    float(
+                        dominant_trigger.magnitude
+                    ),
+
+                reason=(
+
+                    "automatic_trigger; "
+                    f"trigger={dominant_trigger.rule_id}; "
+                    f"valence={dominant_trigger.valence:+.4f}; "
+                    f"magnitude={dominant_trigger.magnitude:.4f}; "
+                    f"priority={dominant_trigger.priority}; "
+                    f"action={automatic_action.name}"
+
+                ),
+
+                components={
+
+                    "automatic":
+                        1.0,
+
+                    "trigger_valence":
+                        float(
+                            dominant_trigger.valence
+                        ),
+
+                    "trigger_magnitude":
+                        float(
+                            dominant_trigger.magnitude
+                        ),
+
+                    "trigger_priority":
+                        float(
+                            dominant_trigger.priority
+                        ),
+
+                },
+
+            )
+
+            decision_path = (
+                "automatic"
+            )
+
+        # ----------------------------------------------------
+        # CAMINHO DELIBERATIVO
+        # ----------------------------------------------------
+
+        else:
+
+            trigger_ids = [
+
+                trigger.rule_id
+
+                for trigger
+                in fired_triggers
+
+            ]
+
+            decision = self.decisions.choose(
+
+                event=
+                    event,
+
+                valence=
+                    valence,
+
+                patterns=
+                    patterns,
+
+                actions=
+                    actions,
+
+                triggered_rules=
+                    trigger_ids,
+
+            )
+
+            # Se um trigger existiu, mas não havia resposta
+            # automática configurada/permitida, registramos
+            # essa condição explicitamente.
+            if (
+                trigger_resolution
+                .requires_automatic_path
+            ):
+
+                decision_path = (
+                    "deliberative_after_unresolved_trigger"
+                )
+
+            else:
+
+                decision_path = (
+                    "deliberative"
+                )
+
+        # ====================================================
+        # 9. EXPERIÊNCIA PENDENTE
+        # ====================================================
+        #
+        # A partir daqui:
+        #
+        #     estímulo
+        #     decisão
+        #     ação
+        #
+        # já existem.
+        #
+        # Mas:
+        #
+        #     consequência
+        #
+        # ainda não.
+        #
+        # Guardamos exatamente o estado cognitivo usado
+        # durante a decisão.
+        # ====================================================
 
         experience = ExperienceRecord(
-            stimulus=event,
-            novelty=novelty,
-            features=features.copy(),
-            decision=decision,
-            pattern_ids=pattern_ids,
+
+            stimulus=
+                event,
+
+            cycle=
+                cycle,
+
+            novelty=
+                novelty,
+
+            features=
+                features.copy(),
+
+            valence=
+                valence,
+
+            patterns=
+                list(
+                    patterns
+                ),
+
+            decision=
+                decision,
+
+            decision_path=
+                decision_path,
+
+            pattern_ids=[
+                pattern_id
+            ],
+
         )
 
-        self._pending_experiences[event.id] = experience
+        self._pending_experiences[
+            event.id
+        ] = experience
 
-        self.cycle_count += 1
+        # ====================================================
+        # 10. RESULTADO DO CICLO
+        # ====================================================
 
         return CognitiveStep(
-            stimulus=event,
-            novelty=novelty,
-            features=features.tolist(),
-            valence=valence,
-            patterns=patterns,
-            triggers=triggers,
-            decision=decision,
+
+            cycle=
+                cycle,
+
+            stimulus=
+                event,
+
+            filtered=
+                False,
+
+            filter_reason=
+                None,
+
+            novelty=
+                novelty,
+
+            features=
+                features.tolist(),
+
+            valence=
+                valence,
+
+            patterns=
+                list(
+                    patterns
+                ),
+
+            triggers=
+                list(
+                    fired_triggers
+                ),
+
+            trigger_resolution=
+                trigger_resolution,
+
+            decision=
+                decision,
+
+            decision_path=
+                decision_path,
+
+            pattern_id=
+                pattern_id,
+
         )
 
-    # =========================================================
-    # APRENDIZADO PÓS-CONSEQUÊNCIA
-    # =========================================================
+    # ========================================================
+    # FEEDBACK FORMAL
+    # ========================================================
+
+    def feedback(
+        self,
+        outcome_event: OutcomeEvent,
+    ) -> FeedbackResult:
+        """
+        Recebe a consequência real após a execução da ação.
+
+        Esse é o segundo momento fundamental do aprendizado:
+
+            experiência
+                ↓
+            ação
+                ↓
+            resultado real r
+                ↓
+            erro de predição
+                ↓
+            alteração de pesos
+                +
+            alteração da memória
+        """
+
+        experience = (
+            self._pending_experiences.get(
+                outcome_event.stimulus_id
+            )
+        )
+
+        if experience is None:
+
+            raise KeyError(
+
+                "Nenhuma experiência pendente encontrada "
+                f"para stimulus_id="
+                f"'{outcome_event.stimulus_id}'."
+
+            )
+
+        # ----------------------------------------------------
+        # GARANTIA CAUSAL
+        # ----------------------------------------------------
+        #
+        # Não permitimos atribuir ao agente a consequência
+        # de uma ação diferente daquela realmente escolhida.
+        # ----------------------------------------------------
+
+        selected_action = (
+            experience.decision.action
+        )
+
+        if (
+            outcome_event.action_id
+            !=
+            selected_action
+        ):
+
+            raise ValueError(
+
+                "OutcomeEvent.action_id não corresponde "
+                "à ação escolhida durante o ciclo. "
+                f"Esperado='{selected_action}', "
+                f"recebido='{outcome_event.action_id}'."
+
+            )
+
+        outcome = float(
+            outcome_event.outcome
+        )
+
+        # ====================================================
+        # 1. VALENCE LEARNING
+        # ====================================================
+        #
+        # Utilizamos φ(E) ORIGINAL.
+        #
+        # NÃO recalculamos novelty.
+        #
+        # Entre process() e feedback(), a memória já recebeu
+        # esse estímulo, portanto recalcular novidade produziria
+        # um vetor diferente daquele usado durante a decisão.
+        # ====================================================
+
+        update: ValenceLearningUpdate = (
+            self.valence.learn(
+
+                features=
+                    experience.features,
+
+                outcome=
+                    outcome,
+
+            )
+        )
+
+        # ====================================================
+        # 2. MEMÓRIA DA CONSEQUÊNCIA
+        # ====================================================
+        #
+        # Pattern
+        #    +
+        # Action
+        #    +
+        # Outcome
+        # ====================================================
+
+        updated_patterns: list[str] = []
+
+        for pattern_id in (
+            experience.pattern_ids
+        ):
+
+            self.memory.record_outcome(
+
+                pattern_id=
+                    pattern_id,
+
+                action_id=
+                    selected_action,
+
+                outcome=
+                    outcome,
+
+            )
+
+            updated_patterns.append(
+                pattern_id
+            )
+
+        # ====================================================
+        # 3. FINALIZA EXPERIÊNCIA
+        # ====================================================
+
+        self._pending_experiences.pop(
+            outcome_event.stimulus_id,
+            None,
+        )
+
+        return FeedbackResult(
+
+            stimulus_id=
+                outcome_event.stimulus_id,
+
+            action_id=
+                selected_action,
+
+            outcome=
+                outcome,
+
+            prediction_error=
+                float(
+                    update.prediction_error
+                ),
+
+            weight_delta=
+                list(
+                    update.delta
+                ),
+
+            updated_pattern_ids=
+                tuple(
+                    updated_patterns
+                ),
+
+        )
+
+    # ========================================================
+    # COMPATIBILIDADE COM demo.py ANTIGO
+    # ========================================================
 
     def learn_from_outcome(
         self,
         event: StimulusEvent,
         novelty: float | None = None,
         outcome: float = 0.0,
-    ) -> None:
+    ) -> FeedbackResult:
         """
-        Atualiza o sistema após observar a consequência real.
+        Interface de compatibilidade.
 
-        outcome deve estar no intervalo:
+        O parâmetro novelty é mantido temporariamente para que
+        o demo.py antigo não quebre.
 
-            -1.0 <= outcome <= +1.0
+        Ele NÃO é utilizado quando existe uma experiência
+        pendente, porque o engine já armazenou o φ(E) original.
 
-        Interpretação:
+        A API preferida daqui para frente é:
 
-            -1.0 = consequência extremamente negativa
-
-             0.0 = neutra
-
-            +1.0 = extremamente positiva
-
-
-        O aprendizado de valência segue conceitualmente:
-
-            erro = resultado_real - resultado_previsto
-
-            Δw = η × erro × φ(E)
-
-        Isso permite que o sistema altere gradualmente
-        sua avaliação de estímulos semelhantes.
+            engine.feedback(
+                OutcomeEvent(...)
+            )
         """
 
-        if not -1.0 <= outcome <= 1.0:
-            raise ValueError(
-                "outcome deve estar entre -1.0 e +1.0"
+        experience = (
+            self._pending_experiences.get(
+                event.id
             )
-
-        # -----------------------------------------------------
-        # Recuperamos a experiência que realmente produziu
-        # aquela decisão.
-        # -----------------------------------------------------
-
-        experience = self._pending_experiences.get(
-            event.id
         )
 
-        if experience is not None:
+        if experience is None:
 
-            features = experience.features
+            raise KeyError(
 
-            actual_novelty = experience.novelty
+                "learn_from_outcome() exige uma experiência "
+                "gerada previamente por process(). "
+                f"Nenhum registro pendente para '{event.id}'."
 
-        else:
-
-            # Compatibilidade para experimentos em que
-            # learn_from_outcome seja chamado separadamente.
-
-            if novelty is None:
-
-                actual_novelty = self._estimate_novelty(
-                    event
-                )
-
-            else:
-
-                actual_novelty = novelty
-
-            features = extract_features(
-                event=event,
-                novelty=actual_novelty,
             )
 
-        # -----------------------------------------------------
-        # 1. ATUALIZA VALÊNCIA APRENDIDA
-        # -----------------------------------------------------
+        feedback_event = OutcomeEvent(
 
-        self.valence.learn(
-            features=features,
-            outcome=outcome,
+            stimulus_id=
+                event.id,
+
+            action_id=
+                experience.decision.action,
+
+            outcome=
+                outcome,
+
+            context_id=
+                event.context_id,
+
         )
 
-        # -----------------------------------------------------
-        # 2. REGISTRA CONSEQUÊNCIA NA MEMÓRIA
-        # -----------------------------------------------------
-        #
-        # No artigo, padrões possuem consequências associadas:
-        #
-        # Pattern
-        #     ↓
-        # Action
-        #     ↓
-        # Outcome
-        #
-        # O nosso memory.py será atualizado para implementar
-        # isso de forma explícita.
-        # -----------------------------------------------------
-
-        if experience is not None:
-
-            self._record_pattern_outcome(
-                experience=experience,
-                outcome=outcome,
-            )
-
-        # -----------------------------------------------------
-        # 3. FINALIZA EXPERIÊNCIA
-        # -----------------------------------------------------
-
-        self._pending_experiences.pop(
-            event.id,
-            None,
+        return self.feedback(
+            feedback_event
         )
 
-    # =========================================================
-    # NOVIDADE
-    # =========================================================
+    # ========================================================
+    # RESOLUÇÃO DE AÇÃO AUTOMÁTICA
+    # ========================================================
 
-    def _estimate_novelty(
-        self,
-        event: StimulusEvent,
-    ) -> float:
+    @staticmethod
+    def _resolve_automatic_action(
+        resolution: TriggerResolution,
+        actions: Sequence[ActionCandidate],
+    ) -> ActionCandidate | None:
         """
-        Estima a novidade do estímulo.
+        Um Trigger pode solicitar uma resposta automática.
 
-        Idealmente:
+        Porém o TriggerSystem NÃO possui autoridade para criar
+        ações que não pertencem ao espaço disponível.
 
-            novelty = 1 - similaridade_com_melhor_padrão
+        Isso é importante por segurança arquitetural.
 
         Portanto:
 
-            padrão idêntico:
-                novidade ≈ 0
+            trigger diz:
+                "execute X"
 
-            experiência totalmente nova:
-                novidade ≈ 1
+            engine verifica:
+                "X existe entre as ações permitidas?"
 
-
-        Enquanto o novo memory.py não estiver implementado,
-        mantemos compatibilidade com o método atual.
+        somente então X pode ser selecionada.
         """
 
-        # A memória futura terá este método.
-        if hasattr(
-            self.memory,
-            "estimate_novelty",
+        if not (
+            resolution
+            .requires_automatic_path
         ):
 
-            novelty = self.memory.estimate_novelty(
-                event
-            )
+            return None
 
-            return self._clamp01(
-                float(novelty)
-            )
-
-        # -----------------------------------------------------
-        # Compatibilidade temporária.
-        #
-        # Criamos features estruturais sem atribuir novidade,
-        # pois novidade é justamente o que estamos tentando
-        # calcular.
-        #
-        # IMPORTANTE:
-        #
-        # No memory.py definitivo, a dimensão "novelty"
-        # será ignorada durante essa comparação.
-        # -----------------------------------------------------
-
-        provisional_features = extract_features(
-            event=event,
-            novelty=0.0,
+        action_name = (
+            resolution.response_action
         )
 
-        novelty = self.memory.novelty(
-            provisional_features
-        )
+        # Trigger foi ativado, mas nenhuma resposta concreta
+        # foi vinculada à regra.
+        #
+        # Nesse caso não inventamos uma ação.
+        if action_name is None:
 
-        return self._clamp01(
-            float(novelty)
-        )
+            return None
 
-    # =========================================================
-    # MEMÓRIA
-    # =========================================================
+        for action in actions:
 
-    def _find_similar_patterns(
+            if (
+                action.name
+                ==
+                action_name
+            ):
+
+                return action
+
+        # Resposta automática solicitada não existe no
+        # espaço atual de ações.
+        #
+        # Falhamos de forma segura:
+        #
+        # não executamos ação inexistente e permitimos que
+        # o DecisionModule escolha entre ações válidas.
+        return None
+
+    # ========================================================
+    # FILTRO SENSORIAL
+    # ========================================================
+
+    def _should_filter(
         self,
         event: StimulusEvent,
-        features: np.ndarray,
-    ) -> list[Any]:
-        """
-        Recupera padrões relacionados à experiência atual.
+    ) -> bool:
 
-        A implementação definitiva ficará em memory.py.
-
-        O engine apenas solicita a busca.
-        """
-
-        if hasattr(
-            self.memory,
-            "find_similar",
+        if (
+            self.sensory_threshold
+            is None
         ):
 
-            result = self.memory.find_similar(
-                stimulus_type=event.type,
-                features=features,
+            return False
+
+        return (
+            event.intensity
+            <
+            self.sensory_threshold
+        )
+
+    # ========================================================
+    # VALIDAÇÃO DO ESTÍMULO
+    # ========================================================
+
+    @staticmethod
+    def _validate_event(
+        event: StimulusEvent,
+    ) -> None:
+
+        if not event.type.strip():
+
+            raise ValueError(
+                "StimulusEvent.type não pode estar vazio."
             )
 
-            return list(result)
+    # ========================================================
+    # VALIDAÇÃO DO ESPAÇO DE AÇÕES
+    # ========================================================
 
-        return []
-
-    def _remember_experience(
-        self,
-        event: StimulusEvent,
-        features: np.ndarray,
-        valence: float,
-    ) -> list[str]:
-        """
-        Registra a experiência na memória.
-
-        Retorna IDs dos padrões afetados quando o sistema
-        de memória disponibilizar identificadores.
-        """
-
-        record = self.memory.remember(
-            stimulus_type=event.type,
-            features=features,
-            valence=valence,
-        )
-
-        pattern_id = getattr(
-            record,
-            "id",
-            None,
-        )
-
-        if pattern_id is None:
-            return []
-
-        return [
-            str(pattern_id)
-        ]
-
-    def _record_pattern_outcome(
-        self,
-        experience: ExperienceRecord,
-        outcome: float,
+    @staticmethod
+    def _validate_action_space(
+        actions: Sequence[ActionCandidate],
     ) -> None:
         """
-        Liga:
+        O espaço comportamental precisa ser explícito.
 
-            padrão
-              +
-            ação
-              +
-            consequência
+        Também impedimos nomes duplicados, pois eles tornariam
+        o feedback ambíguo:
 
-        Essa associação é crucial.
-
-        O agente não precisa apenas lembrar:
-
-            "isso aconteceu"
-
-        Ele precisa aprender:
-
-            "quando isso aconteceu e eu fiz X,
-             o resultado foi Y".
+            qual "avoid" realmente foi executado?
         """
 
-        if not hasattr(
-            self.memory,
-            "record_outcome",
-        ):
-            return
+        if not actions:
 
-        for pattern_id in experience.pattern_ids:
-
-            self.memory.record_outcome(
-                pattern_id=pattern_id,
-                action_id=experience.decision.action,
-                outcome=outcome,
+            raise ValueError(
+                "O agente não possui nenhuma ação disponível."
             )
 
-    # =========================================================
+        names = [
+
+            action.name
+
+            for action
+            in actions
+
+        ]
+
+        if (
+            len(names)
+            !=
+            len(
+                set(names)
+            )
+        ):
+
+            raise ValueError(
+                "ActionCandidate.name deve ser único "
+                "dentro do espaço de ações."
+            )
+
+    # ========================================================
+    # EXPERIÊNCIAS PENDENTES
+    # ========================================================
+
+    @property
+    def pending_experiences(
+        self,
+    ) -> tuple[str, ...]:
+        """
+        IDs dos estímulos que aguardam consequência.
+        """
+
+        return tuple(
+            self._pending_experiences.keys()
+        )
+
+    def get_pending_experience(
+        self,
+        stimulus_id: str,
+    ) -> ExperienceRecord | None:
+
+        return (
+            self._pending_experiences.get(
+                stimulus_id
+            )
+        )
+
+    # ========================================================
     # ESTADO INTERNO
-    # =========================================================
+    # ========================================================
 
     def internal_state(
         self,
     ) -> dict[str, Any]:
         """
-        Fornece uma representação simples do próprio estado.
+        Estado observável do organismo artificial.
 
-        Isso NÃO é ainda o Self-Monitor completo.
+        Isso ainda NÃO é o Self-Monitor.
 
-        Serve apenas como base observável para quando
-        implementarmos a sexta camada da arquitetura.
+        É apenas a interface que o Self-Monitor utilizará
+        futuramente para transformar estados internos em:
+
+            StimulusEvent(
+                source=SELF
+            )
         """
-
-        pattern_count = 0
-
-        if hasattr(
-            self.memory,
-            "patterns",
-        ):
-
-            try:
-                pattern_count = len(
-                    self.memory.patterns
-                )
-
-            except TypeError:
-                pattern_count = 0
 
         return {
 
@@ -643,51 +1215,37 @@ class CognitiveEngine:
                     self._pending_experiences
                 ),
 
-            "learned_experiences":
-                self.valence.experience_count,
+            "memory":
+                self.memory.snapshot(),
 
-            "known_patterns":
-                pattern_count,
+            "valence":
+                self.valence.snapshot(),
 
-            "valence_weights":
-                self.valence.weights.tolist(),
+            "triggers":
+                self.triggers.snapshot(),
+
+            "decision":
+                self.decisions.snapshot(),
 
         }
 
-    # =========================================================
-    # VALIDAÇÕES
-    # =========================================================
+    # ========================================================
+    # UTILIDADE
+    # ========================================================
 
     @staticmethod
-    def _validate_event(
-        event: StimulusEvent,
-    ) -> None:
-        """
-        Faz validações semânticas adicionais.
-
-        Pydantic já verifica os tipos e intensidade.
-        """
-
-        if not event.type.strip():
-
-            raise ValueError(
-                "O estímulo precisa possuir um tipo."
-            )
-
-    @staticmethod
-    def _clamp01(
+    def _clamp(
         value: float,
+        minimum: float,
+        maximum: float,
     ) -> float:
-        """
-        Garante valor dentro de:
-
-            [0, 1]
-        """
 
         return max(
-            0.0,
+            minimum,
             min(
-                1.0,
-                value,
+                maximum,
+                float(
+                    value
+                ),
             ),
         )

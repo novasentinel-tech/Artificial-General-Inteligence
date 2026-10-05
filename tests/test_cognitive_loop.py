@@ -30,16 +30,25 @@ from agi.valence import ValenceEngine
 # HELPERS
 # ============================================================
 
+
 def make_danger_event(
     *,
     intensity: float = 0.9,
     context_id: str = "danger-context",
 ) -> StimulusEvent:
     """
-    Estímulo experimental de caráter potencialmente adverso.
+    Cria um estímulo experimental potencialmente adverso.
 
-    O evento NÃO recebe valência manualmente.
-    Apenas possui características observáveis.
+    IMPORTANTE:
+
+    Nenhuma valência é colocada manualmente no StimulusEvent.
+
+    O estímulo contém apenas características observáveis
+    que posteriormente poderão participar de:
+
+        φ(E)
+            ↓
+        V(E)
     """
 
     return StimulusEvent(
@@ -57,42 +66,57 @@ def make_danger_event(
 
 def make_actions() -> list[ActionCandidate]:
     """
-    Espaço experimental de ações.
+    Espaço experimental de ações conforme o modelo EVP.
 
-    Enquanto models.py ainda utiliza metadata para O(a) e C(a),
-    armazenamos essas propriedades ali.
+    Para cada ação:
+
+        O(a) = expected_outcome
+        C(a) = cost
+
+    Esses valores são propriedades explícitas da ação
+    e NÃO ficam mais dentro de metadata.
     """
 
     return [
+
         ActionCandidate(
             name="observe",
-            metadata={
-                "expected_outcome": 0.25,
-                "cost": 0.05,
-            },
+            expected_outcome=0.25,
+            cost=0.05,
         ),
+
         ActionCandidate(
             name="investigate",
-            metadata={
-                "expected_outcome": 0.80,
-                "cost": 0.25,
-            },
+            expected_outcome=0.80,
+            cost=0.25,
         ),
+
         ActionCandidate(
             name="avoid",
-            metadata={
-                "expected_outcome": 0.60,
-                "cost": 0.10,
-            },
+            expected_outcome=0.60,
+            cost=0.10,
         ),
+
     ]
 
 
 # ============================================================
-# 1. FEATURE VECTOR
+# 1. FEATURE VECTOR EVP
 # ============================================================
 
+
 def test_feature_vector_follows_evp_dimensions():
+    """
+    φ(E) deve possuir exatamente as cinco dimensões
+    atualmente definidas pelo modelo EVP:
+
+        intensity
+        novelty
+        urgency
+        goal_alignment
+        risk
+    """
+
     event = make_danger_event()
 
     features = extract_features(
@@ -110,17 +134,44 @@ def test_feature_vector_follows_evp_dimensions():
 
     assert features.shape == (5,)
 
-    assert features[0] == pytest.approx(0.90)
-    assert features[1] == pytest.approx(0.75)
-    assert features[2] == pytest.approx(0.90)
-    assert features[3] == pytest.approx(-0.80)
-    assert features[4] == pytest.approx(0.95)
+    assert features[0] == pytest.approx(
+        0.90
+    )
+
+    assert features[1] == pytest.approx(
+        0.75
+    )
+
+    assert features[2] == pytest.approx(
+        0.90
+    )
+
+    assert features[3] == pytest.approx(
+        -0.80
+    )
+
+    assert features[4] == pytest.approx(
+        0.95
+    )
+
+
+# ============================================================
+# 2. NOVIDADE NÃO PODE CALCULAR A SI PRÓPRIA
+# ============================================================
 
 
 def test_pattern_features_exclude_novelty():
     """
-    A novidade não pode ser usada para calcular a própria
-    novidade.
+    O vetor estrutural utilizado para comparar padrões
+    não pode conter novelty.
+
+    Caso contrário teríamos circularidade:
+
+        novelty
+            ↓
+        comparação de padrões
+            ↓
+        novelty
     """
 
     event = make_danger_event()
@@ -132,7 +183,9 @@ def test_pattern_features_exclude_novelty():
     assert features.shape == (4,)
 
     assert np.allclose(
+
         features,
+
         np.array(
             [
                 0.9,
@@ -141,22 +194,26 @@ def test_pattern_features_exclude_novelty():
                 0.95,
             ]
         ),
+
     )
 
 
 # ============================================================
-# 2. MEMÓRIA E NOVIDADE
+# 3. PRIMEIRA EXPERIÊNCIA É TOTALMENTE NOVA
 # ============================================================
+
 
 def test_first_experience_is_maximally_novel(
     tmp_path,
 ):
     memory = PatternMemory(
+
         storage_path=(
             tmp_path
             /
             "memory.json"
         )
+
     )
 
     event = make_danger_event()
@@ -170,15 +227,22 @@ def test_first_experience_is_maximally_novel(
     )
 
 
+# ============================================================
+# 4. REPETIÇÃO REDUZ NOVIDADE
+# ============================================================
+
+
 def test_repeated_experience_reduces_novelty(
     tmp_path,
 ):
     memory = PatternMemory(
+
         storage_path=(
             tmp_path
             /
             "memory.json"
         )
+
     )
 
     event = make_danger_event()
@@ -195,9 +259,16 @@ def test_repeated_experience_reduces_novelty(
     )
 
     memory.remember(
-        stimulus_type=event.type,
-        features=features,
-        valence=-0.2,
+
+        stimulus_type=
+            event.type,
+
+        features=
+            features,
+
+        valence=
+            -0.2,
+
     )
 
     novelty_after = (
@@ -210,26 +281,33 @@ def test_repeated_experience_reduces_novelty(
         1.0
     )
 
-    assert novelty_after < novelty_before
+    assert (
+        novelty_after
+        <
+        novelty_before
+    )
 
-    # Para um evento praticamente idêntico esperamos
-    # novidade próxima de zero.
+    # Para um evento praticamente idêntico,
+    # esperamos novidade próxima de zero.
     assert novelty_after < 0.10
 
 
 # ============================================================
-# 3. FORMAÇÃO E CONSOLIDAÇÃO DE PADRÕES
+# 5. CONSOLIDAÇÃO DE PADRÕES
 # ============================================================
+
 
 def test_similar_experiences_consolidate_same_pattern(
     tmp_path,
 ):
     memory = PatternMemory(
+
         storage_path=(
             tmp_path
             /
             "memory.json"
         )
+
     )
 
     event = make_danger_event()
@@ -240,15 +318,29 @@ def test_similar_experiences_consolidate_same_pattern(
     )
 
     first = memory.remember(
-        stimulus_type=event.type,
-        features=features,
-        valence=-0.4,
+
+        stimulus_type=
+            event.type,
+
+        features=
+            features,
+
+        valence=
+            -0.4,
+
     )
 
     second = memory.remember(
-        stimulus_type=event.type,
-        features=features,
-        valence=-0.6,
+
+        stimulus_type=
+            event.type,
+
+        features=
+            features,
+
+        valence=
+            -0.6,
+
     )
 
     assert first.id == second.id
@@ -257,29 +349,42 @@ def test_similar_experiences_consolidate_same_pattern(
         memory.patterns
     ) == 1
 
-    assert memory.patterns[0].frequency == 2
+    assert (
+        memory.patterns[0].frequency
+        ==
+        2
+    )
 
     assert (
+
         memory.patterns[0]
         .predicted_valence_mean
+
         ==
-        pytest.approx(-0.5)
+
+        pytest.approx(
+            -0.5
+        )
+
     )
 
 
 # ============================================================
-# 4. PADRÃO + AÇÃO + CONSEQUÊNCIA
+# 6. PADRÃO + AÇÃO + CONSEQUÊNCIA
 # ============================================================
+
 
 def test_memory_learns_action_outcome(
     tmp_path,
 ):
     memory = PatternMemory(
+
         storage_path=(
             tmp_path
             /
             "memory.json"
         )
+
     )
 
     event = make_danger_event()
@@ -290,26 +395,52 @@ def test_memory_learns_action_outcome(
     )
 
     pattern = memory.remember(
-        stimulus_type=event.type,
-        features=features,
-        valence=-0.5,
+
+        stimulus_type=
+            event.type,
+
+        features=
+            features,
+
+        valence=
+            -0.5,
+
     )
 
     memory.record_outcome(
-        pattern_id=pattern.id,
-        action_id="avoid",
-        outcome=0.8,
+
+        pattern_id=
+            pattern.id,
+
+        action_id=
+            "avoid",
+
+        outcome=
+            0.8,
+
     )
 
     memory.record_outcome(
-        pattern_id=pattern.id,
-        action_id="avoid",
-        outcome=0.6,
+
+        pattern_id=
+            pattern.id,
+
+        action_id=
+            "avoid",
+
+        outcome=
+            0.6,
+
     )
 
     expected = memory.expected_outcome(
-        pattern_id=pattern.id,
-        action_id="avoid",
+
+        pattern_id=
+            pattern.id,
+
+        action_id=
+            "avoid",
+
     )
 
     assert expected == pytest.approx(
@@ -318,19 +449,37 @@ def test_memory_learns_action_outcome(
 
 
 # ============================================================
-# 5. VALÊNCIA NEUTRA INICIAL
+# 7. PRIOR NEUTRO
 # ============================================================
+
 
 def test_neutral_weights_produce_neutral_initial_valence(
     tmp_path,
 ):
+    """
+    Sem experiência e sem pesos intrínsecos configurados:
+
+        w = 0
+
+    portanto:
+
+        wᵀφ(E) = 0
+
+    e:
+
+        tanh(0) = 0
+    """
+
     engine = ValenceEngine(
+
         storage_path=(
             tmp_path
             /
             "valence.json"
         ),
+
         load_state=False,
+
     )
 
     event = make_danger_event()
@@ -359,28 +508,53 @@ def test_neutral_weights_produce_neutral_initial_valence(
 
 
 # ============================================================
-# 6. REGRA DELTA DO ARTIGO
+# 8. REGRA DELTA DO ARTIGO
 # ============================================================
+
 
 def test_valence_delta_rule_matches_article(
     tmp_path,
 ):
     """
-    Δw = η(r - wᵀφ(E))φ(E)
+    Fórmula:
 
-    Começando em w = 0:
+        Δw =
+            η
+            *
+            (
+                r - wᵀφ(E)
+            )
+            *
+            φ(E)
 
-        Δw = ηrφ(E)
+
+    Como inicialmente:
+
+        w = 0
+
+    então:
+
+        Δw =
+            η
+            *
+            r
+            *
+            φ(E)
     """
 
     engine = ValenceEngine(
-        learning_rate=0.05,
+
+        learning_rate=
+            0.05,
+
         storage_path=(
             tmp_path
             /
             "valence.json"
         ),
+
         load_state=False,
+
     )
 
     event = make_danger_event()
@@ -393,16 +567,27 @@ def test_valence_delta_rule_matches_article(
     outcome = -0.9
 
     update = engine.learn(
-        features=phi,
-        outcome=outcome,
+
+        features=
+            phi,
+
+        outcome=
+            outcome,
+
     )
 
     expected_delta = (
+
         0.05
+
         *
+
         (-0.9)
+
         *
+
         phi
+
     )
 
     assert np.allclose(
@@ -417,20 +602,26 @@ def test_valence_delta_rule_matches_article(
 
 
 # ============================================================
-# 7. EXPERIÊNCIA ALTERA VALÊNCIA FUTURA
+# 9. EXPERIÊNCIA ALTERA VALÊNCIA
 # ============================================================
+
 
 def test_negative_experience_makes_similar_stimulus_more_negative(
     tmp_path,
 ):
     engine = ValenceEngine(
-        learning_rate=0.05,
+
+        learning_rate=
+            0.05,
+
         storage_path=(
             tmp_path
             /
             "valence.json"
         ),
+
         load_state=False,
+
     )
 
     event = make_danger_event()
@@ -446,8 +637,13 @@ def test_negative_experience_makes_similar_stimulus_more_negative(
     )
 
     engine.learn(
-        features=phi,
-        outcome=-1.0,
+
+        features=
+            phi,
+
+        outcome=
+            -1.0,
+
     )
 
     after = engine.evaluate(
@@ -459,12 +655,17 @@ def test_negative_experience_makes_similar_stimulus_more_negative(
         0.0
     )
 
-    assert after.score < before.score
+    assert (
+        after.score
+        <
+        before.score
+    )
 
 
 # ============================================================
-# 8. GATILHO NEGATIVO
+# 10. GATILHO NEGATIVO
 # ============================================================
+
 
 def test_high_negative_valence_activates_trigger():
     system = TriggerSystem()
@@ -472,71 +673,123 @@ def test_high_negative_valence_activates_trigger():
     event = make_danger_event()
 
     valence = ValenceResult(
-        stimulus_id=event.id,
-        score=-0.90,
-        confidence=0.90,
+
+        stimulus_id=
+            event.id,
+
+        score=
+            -0.90,
+
+        confidence=
+            0.90,
+
         components={},
-        raw_activation=-1.47,
+
+        raw_activation=
+            -1.47,
+
     )
 
     fired = system.evaluate(
+
         event,
+
         valence,
+
         cycle=1,
+
     )
 
-    assert len(fired) == 1
+    assert len(
+        fired
+    ) == 1
 
     assert (
+
         fired[0].polarity
+
         ==
+
         TriggerPolarity.NEGATIVE
+
     )
 
     assert fired[0].priority == 90
 
 
 # ============================================================
-# 9. GATILHO POSITIVO
+# 11. GATILHO POSITIVO
 # ============================================================
+
 
 def test_high_positive_valence_also_activates_trigger():
     system = TriggerSystem()
 
     event = StimulusEvent(
-        source=StimulusSource.EXTERNAL,
-        type="resource",
-        intensity=0.8,
-        context_id="resource-context",
+
+        source=
+            StimulusSource.EXTERNAL,
+
+        type=
+            "resource",
+
+        intensity=
+            0.8,
+
+        context_id=
+            "resource-context",
+
         payload={},
+
     )
 
     valence = ValenceResult(
-        stimulus_id=event.id,
-        score=0.88,
-        confidence=0.80,
+
+        stimulus_id=
+            event.id,
+
+        score=
+            0.88,
+
+        confidence=
+            0.80,
+
         components={},
-        raw_activation=1.38,
+
+        raw_activation=
+            1.38,
+
     )
 
     fired = system.evaluate(
+
         event,
+
         valence,
+
         cycle=1,
+
     )
 
-    assert len(fired) == 1
+    assert len(
+        fired
+    ) == 1
 
     assert (
+
         fired[0].polarity
+
         ==
+
         TriggerPolarity.POSITIVE
+
     )
 
 
 # ============================================================
-# 10. COOLDOWN
+# 12. COOLDOWN
 # ============================================================
+
 
 def test_trigger_cooldown_prevents_repeated_loop():
     system = TriggerSystem()
@@ -546,26 +799,46 @@ def test_trigger_cooldown_prevents_repeated_loop():
     )
 
     valence = ValenceResult(
-        stimulus_id=event.id,
-        score=-0.95,
-        confidence=1.0,
+
+        stimulus_id=
+            event.id,
+
+        score=
+            -0.95,
+
+        confidence=
+            1.0,
+
         components={},
-        raw_activation=-2.0,
+
+        raw_activation=
+            -2.0,
+
     )
 
     first = system.evaluate(
+
         event,
+
         valence,
+
         cycle=1,
+
     )
 
     second = system.evaluate(
+
         event,
+
         valence,
+
         cycle=2,
+
     )
 
-    assert len(first) == 1
+    assert len(
+        first
+    ) == 1
 
     assert second == []
 
@@ -575,8 +848,9 @@ def test_trigger_cooldown_prevents_repeated_loop():
 
 
 # ============================================================
-# 11. CONTEXTOS DIFERENTES NÃO SE BLOQUEIAM
+# 13. COOLDOWN SENSÍVEL AO CONTEXTO
 # ============================================================
+
 
 def test_cooldown_is_context_sensitive():
     system = TriggerSystem()
@@ -590,61 +864,126 @@ def test_cooldown_is_context_sensitive():
     )
 
     first_valence = ValenceResult(
-        stimulus_id=first_event.id,
-        score=-0.95,
-        confidence=1.0,
+
+        stimulus_id=
+            first_event.id,
+
+        score=
+            -0.95,
+
+        confidence=
+            1.0,
+
         components={},
-        raw_activation=-2.0,
+
+        raw_activation=
+            -2.0,
+
     )
 
     second_valence = ValenceResult(
-        stimulus_id=second_event.id,
-        score=-0.97,
-        confidence=1.0,
+
+        stimulus_id=
+            second_event.id,
+
+        score=
+            -0.97,
+
+        confidence=
+            1.0,
+
         components={},
-        raw_activation=-2.1,
+
+        raw_activation=
+            -2.1,
+
     )
 
     first = system.evaluate(
+
         first_event,
+
         first_valence,
+
         cycle=1,
+
     )
 
     second = system.evaluate(
+
         second_event,
+
         second_valence,
+
         cycle=2,
+
     )
 
-    assert len(first) == 1
-    assert len(second) == 1
+    assert len(
+        first
+    ) == 1
+
+    assert len(
+        second
+    ) == 1
 
 
 # ============================================================
-# 12. MEMÓRIA NO DECISION MODULE
+# 14. VALÊNCIA DA MEMÓRIA
 # ============================================================
+
 
 def test_memory_valence_is_similarity_weighted():
     patterns = [
+
         PatternMatch(
-            pattern_id="p1",
-            stimulus_type="danger",
-            similarity=1.0,
-            average_valence=-0.8,
-            frequency=10,
-            weight=8.0,
+
+            pattern_id=
+                "p1",
+
+            stimulus_type=
+                "danger",
+
+            similarity=
+                1.0,
+
+            average_valence=
+                -0.8,
+
+            frequency=
+                10,
+
+            weight=
+                8.0,
+
             action_expectations={},
+
         ),
+
         PatternMatch(
-            pattern_id="p2",
-            stimulus_type="danger",
-            similarity=0.5,
-            average_valence=0.4,
-            frequency=4,
-            weight=2.0,
+
+            pattern_id=
+                "p2",
+
+            stimulus_type=
+                "danger",
+
+            similarity=
+                0.5,
+
+            average_valence=
+                0.4,
+
+            frequency=
+                4,
+
+            weight=
+                2.0,
+
             action_expectations={},
+
         ),
+
     ]
 
     result = (
@@ -655,9 +994,21 @@ def test_memory_valence_is_similarity_weighted():
     )
 
     expected = (
-        (-0.8 * 1.0)
+
+        (
+            -0.8
+            *
+            1.0
+        )
+
         +
-        (0.4 * 0.5)
+
+        (
+            0.4
+            *
+            0.5
+        )
+
     ) / 2
 
     assert result == pytest.approx(
@@ -666,81 +1017,164 @@ def test_memory_valence_is_similarity_weighted():
 
 
 # ============================================================
-# 13. EQUAÇÃO DE UTILIDADE
+# 15. EQUAÇÃO DE UTILIDADE EVP
 # ============================================================
 
+
 def test_decision_uses_exact_evp_utility_equation():
+    """
+    Testa:
+
+        U(a|E) =
+            O(a)
+            *
+            (
+                αV(E)
+                +
+                βv_memory
+            )
+            -
+            C(a)
+    """
+
     event = StimulusEvent(
-        source=StimulusSource.EXTERNAL,
-        type="resource",
-        intensity=0.7,
+
+        source=
+            StimulusSource.EXTERNAL,
+
+        type=
+            "resource",
+
+        intensity=
+            0.7,
+
         payload={},
+
     )
 
     valence = ValenceResult(
-        stimulus_id=event.id,
-        score=0.50,
-        confidence=0.90,
+
+        stimulus_id=
+            event.id,
+
+        score=
+            0.50,
+
+        confidence=
+            0.90,
+
         components={},
-        raw_activation=0.5493,
+
+        raw_activation=
+            0.5493,
+
     )
 
     patterns = [
+
         PatternMatch(
-            pattern_id="pattern-1",
-            stimulus_type="resource",
-            similarity=1.0,
-            average_valence=0.50,
-            frequency=5,
-            weight=3.0,
+
+            pattern_id=
+                "pattern-1",
+
+            stimulus_type=
+                "resource",
+
+            similarity=
+                1.0,
+
+            average_valence=
+                0.50,
+
+            frequency=
+                5,
+
+            weight=
+                3.0,
+
             action_expectations={},
+
         )
+
     ]
 
     actions = [
+
         ActionCandidate(
             name="action_a",
-            metadata={
-                "expected_outcome": 0.8,
-                "cost": 0.1,
-            },
+            expected_outcome=0.8,
+            cost=0.1,
         ),
+
         ActionCandidate(
             name="action_b",
-            metadata={
-                "expected_outcome": 0.2,
-                "cost": 0.0,
-            },
+            expected_outcome=0.2,
+            cost=0.0,
         ),
+
     ]
 
     decision = DecisionModule(
-        alpha=0.6,
-        beta=0.4,
-        exploration_rate=0.0,
+
+        alpha=
+            0.6,
+
+        beta=
+            0.4,
+
+        exploration_rate=
+            0.0,
+
     )
 
     result = decision.choose(
-        event=event,
-        valence=valence,
-        patterns=patterns,
-        actions=actions,
+
+        event=
+            event,
+
+        valence=
+            valence,
+
+        patterns=
+            patterns,
+
+        actions=
+            actions,
+
     )
 
-    # integrated:
+    # --------------------------------------------------------
+    # VALÊNCIA INTEGRADA
+    # --------------------------------------------------------
     #
     # 0.6(0.5) + 0.4(0.5)
-    # = 0.5
     #
-    # Action A:
+    # =
     #
-    # U = 0.8(0.5) - 0.1
-    # U = 0.3
+    # 0.5
     #
-    # Action B:
     #
-    # U = 0.2(0.5) - 0
-    # U = 0.1
+    # ACTION A:
+    #
+    # U =
+    #
+    # 0.8(0.5) - 0.1
+    #
+    # =
+    #
+    # 0.3
+    #
+    #
+    # ACTION B:
+    #
+    # U =
+    #
+    # 0.2(0.5) - 0
+    #
+    # =
+    #
+    # 0.1
+    # --------------------------------------------------------
 
     assert result.action == "action_a"
 
@@ -749,84 +1183,166 @@ def test_decision_uses_exact_evp_utility_equation():
     )
 
     assert (
+
         result.components[
             "integrated_valence"
         ]
+
         ==
-        pytest.approx(0.50)
+
+        pytest.approx(
+            0.50
+        )
+
     )
 
 
 # ============================================================
-# 14. BAIXA CONFIANÇA NÃO DOMINA DECISÃO
+# 16. BAIXA CONFIANÇA
 # ============================================================
 
+
 def test_low_confidence_disables_current_valence():
+    """
+    A arquitetura técnica utiliza V(E) no DecisionModule
+    somente quando a confiança ultrapassa o limiar.
+
+    Portanto:
+
+        confidence < threshold
+
+    implica:
+
+        V_used = 0
+    """
+
     event = make_danger_event()
 
     valence = ValenceResult(
-        stimulus_id=event.id,
-        score=-0.99,
-        confidence=0.10,
+
+        stimulus_id=
+            event.id,
+
+        score=
+            -0.99,
+
+        confidence=
+            0.10,
+
         components={},
-        raw_activation=-2.64,
+
+        raw_activation=
+            -2.64,
+
     )
 
     actions = make_actions()
 
     decision = DecisionModule(
-        exploration_rate=0.0,
+        exploration_rate=0.0
     )
 
     result = decision.choose(
-        event=event,
-        valence=valence,
+
+        event=
+            event,
+
+        valence=
+            valence,
+
         patterns=[],
-        actions=actions,
+
+        actions=
+            actions,
+
     )
 
     assert (
+
         result.components[
             "current_valence"
         ]
+
         ==
-        pytest.approx(0.0)
+
+        pytest.approx(
+            0.0
+        )
+
     )
 
     assert (
+
         result.components[
             "memory_valence"
         ]
+
         ==
-        pytest.approx(0.0)
+
+        pytest.approx(
+            0.0
+        )
+
     )
 
 
 # ============================================================
-# 15. ε-GREEDY
+# 17. ε-GREEDY
 # ============================================================
 
+
 def test_epsilon_greedy_can_force_exploration():
+    """
+    ε = 1.0
+
+    significa:
+
+        explorar em 100% das decisões.
+    """
+
     event = make_danger_event()
 
     valence = ValenceResult(
-        stimulus_id=event.id,
-        score=0.5,
-        confidence=1.0,
+
+        stimulus_id=
+            event.id,
+
+        score=
+            0.5,
+
+        confidence=
+            1.0,
+
         components={},
-        raw_activation=0.55,
+
+        raw_activation=
+            0.55,
+
     )
 
     decision = DecisionModule(
-        exploration_rate=1.0,
-        random_seed=42,
+
+        exploration_rate=
+            1.0,
+
+        random_seed=
+            42,
+
     )
 
     result = decision.choose(
-        event=event,
-        valence=valence,
+
+        event=
+            event,
+
+        valence=
+            valence,
+
         patterns=[],
-        actions=make_actions(),
+
+        actions=
+            make_actions(),
+
     )
 
     assert (
@@ -835,20 +1351,29 @@ def test_epsilon_greedy_can_force_exploration():
     )
 
     assert (
+
         decision.last_trace.mode
+
         ==
+
         "exploration"
+
     )
 
-    # Conforme implementação técnica original.
+    # Conforme nossa implementação:
+    #
+    # durante exploração, result.score = 0,
+    # mas a utilidade calculada continua disponível
+    # no DecisionTrace/components.
     assert result.score == pytest.approx(
         0.0
     )
 
 
 # ============================================================
-# 16. PERSISTÊNCIA DA MEMÓRIA
+# 18. PERSISTÊNCIA DA PATTERN MEMORY
 # ============================================================
+
 
 def test_pattern_memory_survives_restart(
     tmp_path,
@@ -871,10 +1396,21 @@ def test_pattern_memory_survives_restart(
     )
 
     first_memory.remember(
-        stimulus_type=event.type,
-        features=features,
-        valence=-0.7,
+
+        stimulus_type=
+            event.type,
+
+        features=
+            features,
+
+        valence=
+            -0.7,
+
     )
+
+    # --------------------------------------------------------
+    # SIMULA UM NOVO PROCESSO / RESTART
+    # --------------------------------------------------------
 
     second_memory = PatternMemory(
         storage_path=path
@@ -885,16 +1421,23 @@ def test_pattern_memory_survives_restart(
     ) == 1
 
     assert (
+
         second_memory.patterns[0]
         .average_valence
+
         ==
-        pytest.approx(-0.7)
+
+        pytest.approx(
+            -0.7
+        )
+
     )
 
 
 # ============================================================
-# 17. PERSISTÊNCIA DA VALÊNCIA APRENDIDA
+# 19. PERSISTÊNCIA DA VALÊNCIA APRENDIDA
 # ============================================================
+
 
 def test_valence_learning_survives_restart(
     tmp_path,
@@ -913,33 +1456,60 @@ def test_valence_learning_survives_restart(
     )
 
     first_engine = ValenceEngine(
-        storage_path=path,
-        load_state=False,
+
+        storage_path=
+            path,
+
+        load_state=
+            False,
+
     )
 
     first_engine.learn(
+
         phi,
-        outcome=-1.0,
+
+        outcome=
+            -1.0,
+
     )
 
     learned_before = (
+
         first_engine
         .learned_weights
         .copy()
+
     )
 
+    # --------------------------------------------------------
+    # SIMULA NOVA EXECUÇÃO
+    # --------------------------------------------------------
+
     second_engine = ValenceEngine(
-        storage_path=path,
-        load_state=True,
+
+        storage_path=
+            path,
+
+        load_state=
+            True,
+
     )
 
     assert np.allclose(
+
         second_engine.learned_weights,
+
         learned_before,
+
     )
 
     assert (
+
         second_engine.experience_count
+
         ==
+
         1
+
     )
